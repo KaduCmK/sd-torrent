@@ -1,12 +1,17 @@
 package br.uerj.graduacao;
 
 import java.io.File;
+import java.;
 // import java.io.FileInputStream;
+// import java.io.RandomAccessFile;
+
+import br.uerj.graduacao.BlockModel;
+
 
 public class TorrentGenerator {
     public long BLOCK_SIZE = 4096;
     public long NUMBER_OF_BLOCKS;
-    public byte[] block_array;
+    public BlockModel[] block_array;
 
     public String name;
     public String file_path;
@@ -19,7 +24,8 @@ public class TorrentGenerator {
         if (file.exists() && !file.isDirectory()) {
             long size = file.length();
             this.NUMBER_OF_BLOCKS = (size / this.BLOCK_SIZE);
-            // Map or array with the indexes of the block (block_0, block_1, ...)
+            
+            // Create a structure for identifying the block and store who has it
         }
 
         else {

@@ -1,23 +1,20 @@
 package br.uerj.graduacao;
 
 public class BlockModel {
-    private int BLOCK_INDEX;
-<<<<<<< HEAD
-    // private Byte block_data;
+    private long BLOCK_INDEX;
+    private long BLOCK_OFFSET;
 
-    public BlockModel (int index, Byte data) {
+    public BlockModel (long index) {
         this.BLOCK_INDEX = index;
-        // this.block_data = data;
+        this.BLOCK_OFFSET = index*4096;
     };
+
+    public long Pointer () {
+        return this.BLOCK_OFFSET;
+    }
 
     public String toString() {
         String name = "block_" + String.valueOf(this.BLOCK_INDEX);
         return name;
-=======
-    private Byte block_data;
-
-    public BlockModel () {
-
->>>>>>> 2d6812abd3b95e0dae6ff4d4afd3d8c65ab17781
     }
 }
