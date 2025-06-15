@@ -12,7 +12,7 @@ public class Main {
         final String TRACKER_ADDRESS = "http://localhost:" + TRACKER_PORT;
         // ----------------------------------
 
-        Tracker tracker = new Tracker();
+        Tracker tracker = new Tracker("destiny.mp4");
         tracker.start(TRACKER_PORT);
 
         System.out.println("Tracker iniciado em " + TRACKER_ADDRESS);

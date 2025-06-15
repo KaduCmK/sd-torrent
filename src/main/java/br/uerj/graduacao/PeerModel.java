@@ -55,7 +55,7 @@ public class PeerModel {
                 }
                 System.out.println("Peer [" + this.id + "] conectado ao tracker com sucesso!");
                 System.out.println("Peers vizinhos: " + neighbors.toString());
-                System.out.println("Blocos iniciais recebidos: " + ownedBlocks.toString());
+                System.out.println(ownedBlocks.size() + " Blocos iniciais recebidos");
             } else {
                 System.out.println(
                         "Erro na comunicação com o tracker para o peer [" + this.id + "]. Código " + responseCode);
