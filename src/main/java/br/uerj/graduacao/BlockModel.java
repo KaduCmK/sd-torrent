@@ -5,18 +5,21 @@ public class BlockModel {
     private long BLOCK_OFFSET;
     private byte[] data;
 
-    public BlockModel (long index, byte[] data) {
+    public BlockModel (long index) {
         this.BLOCK_INDEX = index;
         this.BLOCK_OFFSET = index*4096;
-
-        this.data = data;
     };
-
-    public long Pointer () {
+    
+    public long pointer () {
         return this.BLOCK_OFFSET;
+    }
+    
+    public void setData(byte[] data) {
+        this.data = data;
     }
 
     public byte[] getData() {
+        // check if is not empty
         return this.data;
     }
 
