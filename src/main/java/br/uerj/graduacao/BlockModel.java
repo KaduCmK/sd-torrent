@@ -10,12 +10,16 @@ public class BlockModel {
         this.BLOCK_OFFSET = index*4096;
     };
     
+    public void setData(byte[] data) {
+        this.data = data;
+    }
+    
     public long pointer () {
         return this.BLOCK_OFFSET;
     }
-    
-    public void setData(byte[] data) {
-        this.data = data;
+
+    public long getBlockIndex() {
+        return this.BLOCK_INDEX;
     }
 
     public byte[] getData() {
