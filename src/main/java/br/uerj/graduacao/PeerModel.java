@@ -10,6 +10,7 @@ public class PeerModel {
     public String id;
     public List<PeerModel> neighbors = new ArrayList<>();
     public List<BlockModel> ownedBlocks = new ArrayList<>();
+
     public PeerModel(String ip, int port, String id) {
         this.ip = ip;
         this.port = port;
@@ -19,14 +20,14 @@ public class PeerModel {
     public void ConnectToTracker() {
         try {
             URL url = new URL("http://localhost" + this.port);
-            HttpURLConnection connect = (HttpURLConnection) url.openConnection();
-            connect.setRequestMethod("GET");
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
             int responseCode = connection.getResponseCode();
             
             if (responseCode == 200) {
                 //recebe lista de peers vizinhos e preenche ela
-                inputStreamReader reader = new InputStreamReader(connection.getInputStream());
-                JsonObject response = JsonParser.parseReader(isr).getAsJsonObject();
+                InputStreamReader reader = new InputStreamReader(connection.getInputStream());
+                JsonObject response = JsonParser.parseReader(reader).getAsJsonObject();
                 JsonArray peers = response.getAsJsonArray("peers");
 
                for (JsonElement element : peers) {
@@ -36,7 +37,7 @@ public class PeerModel {
                 
                 if (peerPort == this.port && peerIp.equals(this.ip)) continue;
 
-                PeerModel p = new PeerModel(id, peerIp, peerPort);
+                PeerModel p = new PeerModel(peerIp, peerPort, id);
                 p.startServer();
                 this.neighbors.add(p);
             }
