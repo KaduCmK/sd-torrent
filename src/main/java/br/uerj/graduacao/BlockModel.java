@@ -7,7 +7,7 @@ public class BlockModel {
 
     public BlockModel (long index) {
         this.BLOCK_INDEX = index;
-        this.BLOCK_OFFSET = index*4096;
+        this.BLOCK_OFFSET = index*Constants.BLOCK_SIZE_BYTES;
     };
     
     public void setData(byte[] data) {
