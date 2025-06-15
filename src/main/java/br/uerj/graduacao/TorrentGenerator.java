@@ -1,43 +1,46 @@
 package br.uerj.graduacao;
 
 import java.io.File;
-// import java.io.FileInputStream;
-// import java.io.RandomAccessFile;
-
-// import br.uerj.graduacao.BlockModel;
-
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class TorrentGenerator {
-    public long BLOCK_SIZE = 4096;
-    public long NUMBER_OF_BLOCKS;
+    private static final Logger LOGGER = Logger.getLogger(TorrentGenerator.class.getName());
+    private static TorrentGenerator instance;
     
     // public String name;
-    public String file_path;
-    public long size_of_file;
+    private long numberOfBlocks;
+    private String filePath;
+    private long sizeOfFile;
 
-    public TorrentGenerator (String file_path) {
-        this.file_path = file_path;
-
-        File file = new File(file_path);
+    private TorrentGenerator(String filePath) {
+        this.filePath = filePath;
+        File file = new File(filePath);
 
         if (file.exists()) {
-            this.size_of_file = file.length();
-            this.NUMBER_OF_BLOCKS = (this.size_of_file / this.BLOCK_SIZE);
-            
-        }
-
-        else {
-            System.out.println("File Not Found!");
+            this.sizeOfFile = file.length();
+            this.numberOfBlocks = (this.sizeOfFile / Constants.BLOCK_SIZE_BYTES);
+            LOGGER.log(Level.INFO, "Generator criado para: {0}", this.filePath);
+            LOGGER.log(Level.INFO, "Tamanho: {0} bytes, Blocos: {1}", new Object[]{this.sizeOfFile, this.numberOfBlocks});
+        } else {
+            LOGGER.log(Level.SEVERE, "Arquivo nao encontrado: {0}", filePath);
             // If possible -> treat
             // If not -> Raise Exception
         }
     }
 
-    public long size() {
-        return this.size_of_file;
+    public static TorrentGenerator getInstance(String filePath) {
+        if (instance == null) {
+            instance = new TorrentGenerator(filePath);
+        }
+        return instance;
     }
 
-    public long numBlocks() {
-        return this.NUMBER_OF_BLOCKS;
+    public long getSize() {
+        return this.sizeOfFile;
+    }
+
+    public long getNumBlocks() {
+        return this.numberOfBlocks;
     }
 }
