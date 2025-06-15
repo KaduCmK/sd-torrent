@@ -15,7 +15,7 @@ public class PeerModel {
         this.port = port;
         this.id = id;
     }
-
+    //faz o peer conectar com o Tracker
     public void ConnectToTracker() {
         try {
             URL url = new URL("http://localhost" + this.port);
@@ -59,18 +59,29 @@ public class PeerModel {
             e.printStackTrace();
         }
     }
-
+    //starta o server pelo lado do peer
     public void startServer(){
     new Thread(() -> {
         try (ServerSocket server = new ServerSocket(this.port)) {
             while (true) {
                 Socket socket = server.accept();
-                new Thread(() -> handleClient(socket)).start();
+                new Thread(socket).start();
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }).start();
 }
-    
+  //faz o gerenciamento do client
+ /* public void handleClient(Socket socket) {
+    try (ObjectInputStream input = new ObjectInputStream(socket.getInputStream()); 
+         ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream()) ) {
+         output.writeObject(response);
+         output.flush();
+
+         // Outros tipos...
+    } catch (IOException | ClassNotFoundException e) {
+        e.printStackTrace();
+    }
+}*/
 }
