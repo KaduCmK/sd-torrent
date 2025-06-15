@@ -1,7 +1,9 @@
 package br.uerj.graduacao;
 
 import io.javalin.Javalin;
+import io.javalin.json.JsonMapper;
 
+import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -10,6 +12,8 @@ import java.util.Set;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import com.google.gson.Gson;
 
 public class Tracker {
     private static final Logger LOGGER = Logger.getLogger(Tracker.class.getName());
@@ -26,7 +30,23 @@ public class Tracker {
     }
 
     public void start(int trackerPort) {
-        this.app = Javalin.create().start(trackerPort);
+        Gson gson = new Gson();
+
+        JsonMapper gsonMapper = new JsonMapper() {
+            @Override
+            public String toJsonString(Object obj, Type type) {
+                return gson.toJson(obj, type);
+            }
+
+            @Override
+            public <T> T fromJsonString(String json, Type targetType) {
+                return gson.fromJson(json, targetType);
+            }
+        };
+
+        this.app = Javalin.create(config -> {
+            config.jsonMapper(gsonMapper);
+        }).start(trackerPort);
         LOGGER.info("Tracker executando na porta " + trackerPort);
 
         this.app.get("/register", ctx -> {
@@ -59,8 +79,9 @@ public class Tracker {
             }
 
             // adicionando novo peer
-            PeerModel newPeer = new PeerModel(ip, peerPort);
+            PeerModel newPeer = new PeerModel(ip, peerPort, peerId);
             peers.add(newPeer);
+            LOGGER.info("Peer " + peerId + " registrado em " + ip + ":" + peerPort);
 
             // coletando peers aleatorios para retornar
             List<PeerModel> otherPeers = peers.stream()

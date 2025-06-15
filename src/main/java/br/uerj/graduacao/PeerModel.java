@@ -1,4 +1,5 @@
 package br.uerj.graduacao;
+
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -16,73 +17,108 @@ public class PeerModel {
         this.port = port;
         this.id = id;
     }
-    //faz o peer conectar com o Tracker
-    public void ConnectToTracker() {
+
+    public PeerModel(String ip, int port) {
+        this.ip = ip;
+        this.port = port;
+        this.id = null;
+    }
+
+    public void connectToTracker(String trackerAddress) {
         try {
-            URL url = new URL("http://localhost" + this.port);
+            URL url = new URL(trackerAddress + "/register?peer_id=" + this.id + "&port=" + this.port);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             int responseCode = connection.getResponseCode();
-            
+
             if (responseCode == 200) {
-                //recebe lista de peers vizinhos e preenche ela
                 InputStreamReader reader = new InputStreamReader(connection.getInputStream());
                 JsonObject response = JsonParser.parseReader(reader).getAsJsonObject();
                 JsonArray peers = response.getAsJsonArray("peers");
 
-               for (JsonElement element : peers) {
-                JsonObject peer = element.getAsJsonObject();
-                String peerIp = peer.get("ip").getAsString();
-                int peerPort = peer.get("port").getAsInt();
-                
-                if (peerPort == this.port && peerIp.equals(this.ip)) continue;
+                for (JsonElement element : peers) {
+                    JsonObject peer = element.getAsJsonObject();
+                    String peerIp = peer.get("ip").getAsString();
+                    int peerPort = peer.get("port").getAsInt();
 
-                PeerModel p = new PeerModel(peerIp, peerPort, id);
-                p.startServer();
-                this.neighbors.add(p);
-            }
-            // Listar blocos
-            JsonArray blocks = response.getAsJsonArray("blocks");
+                    if (peerPort == this.port && peerIp.equals(this.ip))
+                        continue;
 
-            for (JsonElement element : blocks) {
-                BlockModel b = new BlockModel(element.getAsLong());
-                this.ownedBlocks.add(b); 
+                    PeerModel p = new PeerModel(peerIp, peerPort);
+                    this.neighbors.add(p);
+                }
+                JsonArray blocks = response.getAsJsonArray("blocks");
+
+                for (JsonElement element : blocks) {
+                    BlockModel b = new BlockModel(element.getAsLong());
+                    this.ownedBlocks.add(b);
+                }
+                System.out.println("Peer [" + this.id + "] conectado ao tracker com sucesso!");
+                System.out.println("Peers vizinhos: " + neighbors.toString());
+                System.out.println("Blocos iniciais recebidos: " + ownedBlocks.toString());
+            } else {
+                System.out.println(
+                        "Erro na comunicação com o tracker para o peer [" + this.id + "]. Código " + responseCode);
+                InputStreamReader errorReader = new InputStreamReader(connection.getErrorStream());
+                JsonObject errorResponse = JsonParser.parseReader(errorReader).getAsJsonObject();
+                System.out.println("Mensagem: " + errorResponse.get("error").getAsString());
             }
-            System.out.println("Conectado ao tracker!");
-            System.out.println("Peers conhecidos: " + neighbors.size()); 
-            System.out.println("Blocos iniciais: " + ownedBlocks.size()); 
-            }
-            else {
-                System.out.println("Erro na comunicação com o tracker. Código " + responseCode);
-            }
-            
+
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
-    //starta o server pelo lado do peer
-    public void startServer(){
-    new Thread(() -> {
-        try (ServerSocket server = new ServerSocket(this.port)) {
-            while (true) {
-                Socket socket = server.accept();
-                new Thread(socket).start();
+
+    // Starta o server pelo lado do peer
+    public void startServer() {
+        new Thread(() -> {
+            try (ServerSocket server = new ServerSocket(this.port)) {
+                System.out.println(">> Servidor do Peer [" + this.id + "] escutando na porta " + this.port);
+                while (true) {
+                    Socket socket = server.accept();
+                    new Thread(() -> handleClient(socket)).start();
+                }
+            } catch (IOException e) {
+                // Silencia o erro de "Address already in use" que pode acontecer ao parar
             }
+        }).start();
+    }
+
+    /**
+     * Lida com conexões de entrada de outros peers.
+     * 
+     * @param socket A conexão com o outro peer.
+     */
+    public void handleClient(Socket socket) {
+        System.out.println(
+                ">> Peer [" + this.id + "] recebeu uma conexão de " + socket.getInetAddress() + ":" + socket.getPort());
+
+        // AQUI entraria a lógica de troca de mensagens:
+        // - O outro peer poderia pedir uma lista de blocos que eu tenho.
+        // - O outro peer poderia pedir um bloco específico.
+
+        // Por enquanto, apenas fechamos a conexão.
+        try {
+            socket.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
-    }).start();
-}
-  //faz o gerenciamento do client
- /* public void handleClient(Socket socket) {
-    try (ObjectInputStream input = new ObjectInputStream(socket.getInputStream()); 
-         ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream()) ) {
-         output.writeObject(response);
-         output.flush();
-
-         // Outros tipos...
-    } catch (IOException | ClassNotFoundException e) {
-        e.printStackTrace();
     }
-}*/
+
+    // faz o gerenciamento do client
+    /*
+     * public void handleClient(Socket socket) {
+     * try (ObjectInputStream input = new
+     * ObjectInputStream(socket.getInputStream());
+     * ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream())
+     * ) {
+     * output.writeObject(response);
+     * output.flush();
+     * 
+     * // Outros tipos...
+     * } catch (IOException | ClassNotFoundException e) {
+     * e.printStackTrace();
+     * }
+     * }
+     */
 }
