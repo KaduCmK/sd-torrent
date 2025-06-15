@@ -96,7 +96,26 @@ public class PeerModel {
         // AQUI entraria a lógica de troca de mensagens:
         // - O outro peer poderia pedir uma lista de blocos que eu tenho.
         // - O outro peer poderia pedir um bloco específico.
+        ObjectInputStream input = new ObjectInputStream(socket.getInputStream());
+        ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream());
 
+        //envia a lista de blocos disponiveis para os demais peers
+        for (PeerModel n : neighbors) {
+            output.writeObject(this.ownedBlocks);
+            System.out.println("Enviada lista de blocos para: " + "Peer [" + n.id + "]";
+        }
+
+        List<BlockModel> recievedList = (List<BlockModel>) input.readObject();
+
+        //recebe lista de Blocos Disponiveis e adiciona a própria lista
+        for (BlockModel b : recievedList) {
+            if (!this.ownedBlocks.contains(b))
+            {
+                this.ownedBlocks.add(b);
+                System.out.println("Peer [" + this.id + "] Recebeu Bloco" + b.getBlockIndex());
+            }
+        }
+        
         // Por enquanto, apenas fechamos a conexão.
         try {
             socket.close();
