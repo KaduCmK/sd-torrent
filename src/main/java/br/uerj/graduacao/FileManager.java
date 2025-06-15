@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 // import java.io.FileNotFoundException;
 
+
 public class FileManager {
     public long BLOCK_SIZE = 4096;
     public long NUMBER_OF_BLOCKS;
@@ -15,8 +16,8 @@ public class FileManager {
 
     private RandomAccessFile manager;
 
-    public FileManager (String name, String path, long size, long num_blocks) {
-        this.name = name;
+    public FileManager (String path, long size, long num_blocks) {
+        // this.name = name;
         this.file_path = path;
         this.size_of_file = size;
         this.NUMBER_OF_BLOCKS = num_blocks;
@@ -24,7 +25,12 @@ public class FileManager {
         try{
             File file = new File(this.file_path);
 
-            this.manager = new RandomAccessFile(file, "rws");
+            if (!file.exists()) {
+                System.out.println(file + "doesnt exit");
+                file.createNewFile();    
+            }
+            
+            this.manager = new RandomAccessFile(file, "rwd");
             
             if (this.manager.length() != this.size_of_file) {manager.setLength(this.size_of_file);}
             // checa o tamanho do arquivo           
@@ -46,12 +52,13 @@ public class FileManager {
         } 
         
         catch (IOException error) {
+            System.out.println("An error was found while writing in the file");
             // position not found in file
             // or error when handling file
         }
     }
 
-    public void readBlock(long index) {
+    public BlockModel readBlock(long index) {
         BlockModel block = new BlockModel(index);
 
         try {
@@ -61,9 +68,12 @@ public class FileManager {
 
             block.setData(data);
         }
-
+        
         catch (IOException error) {
             // handle
+            System.out.println("An error was found while reading the file");
         }
+
+        return block;
     }
 }

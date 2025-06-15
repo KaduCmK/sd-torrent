@@ -11,7 +11,7 @@ public class TorrentGenerator {
     public long BLOCK_SIZE = 4096;
     public long NUMBER_OF_BLOCKS;
     
-    public String name;
+    // public String name;
     public String file_path;
     public long size_of_file;
 
@@ -20,7 +20,7 @@ public class TorrentGenerator {
 
         File file = new File(file_path);
 
-        if (file.exists() && !file.isDirectory()) {
+        if (file.exists()) {
             this.size_of_file = file.length();
             this.NUMBER_OF_BLOCKS = (this.size_of_file / this.BLOCK_SIZE);
             
@@ -31,5 +31,13 @@ public class TorrentGenerator {
             // If possible -> treat
             // If not -> Raise Exception
         }
+    }
+
+    public long size() {
+        return this.size_of_file;
+    }
+
+    public long numBlocks() {
+        return this.NUMBER_OF_BLOCKS;
     }
 }
