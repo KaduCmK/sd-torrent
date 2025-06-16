@@ -199,7 +199,7 @@ public class Peer extends PeerInfo {
             return;
 
         Map<Long, Integer> blockFrequencies = getBlockFrequencies();
-        if (blockFrequencies.isEmpty() && !isComplete())
+        if (blockFrequencies.isEmpty())
             return;
 
         Set<Long> rareBlockSet = blockFrequencies.entrySet().stream()
