@@ -31,9 +31,10 @@ public class ProgressDisplay implements Runnable {
                 }
 
                 allPeersComplete = allDoneCurrentCycle;
-                Thread.sleep(250); // Refresh rate
+                Thread.sleep(Constants.PROGRESS_BAR_REFRESH_RATE_MS);
             }
             // Desenha uma última vez para mostrar 100% em tudo
+            Thread.sleep(100);
             clearConsole();
             for (Peer peer : peers) {
                 drawPeerStatus(peer);

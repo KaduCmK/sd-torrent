@@ -281,18 +281,17 @@ public class Peer extends PeerInfo {
     }
 
     private boolean verifyChecksum() {
-        this.status.set(PeerStatus.VERIFICANDO);
-        LOGGER.info("[" + id + "] Verificando integridade do arquivo...");
         try (InputStream is = Files.newInputStream(Paths.get(this.fileManager.filePath))) {
+            this.status.set(PeerStatus.VERIFICANDO);
+            Thread.sleep(1000);
             String downloadedFileChecksum = DigestUtils.md5Hex(is);
 
             if (this.originalChecksum.equals(downloadedFileChecksum)) {
-                LOGGER.info("[" + id + "] Checksum OK! O arquivo está íntegro.");
                 return true;
             } else {
                 this.status.set(PeerStatus.CORROMPIDO);
                 this.myBlocks.clear();
-                Thread.sleep(1500);
+                Thread.sleep(2000);
                 return false;
             }
         } catch (IOException e) {
