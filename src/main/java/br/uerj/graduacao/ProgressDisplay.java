@@ -48,21 +48,35 @@ public class ProgressDisplay implements Runnable {
 
     private void drawPeerStatus(Peer peer) {
         String peerId = peer.getId();
+        String status = peer.getStatus().toString();
         Set<PeerInfo> unchoked = peer.getUnchokedPeers();
         String neighbors = unchoked.stream()
                 .limit(5)
                 .map(p -> "peer-" + p.port)
                 .collect(Collectors.joining(", "));
 
-        System.out.printf("Peer: %-15s | Vizinhos (Unchoked): %s\n", peerId, neighbors);
+        System.out.printf("Peer: %-12s | Status: %-15s | Vizinhos (Unchoked): %s\n", peerId, status, neighbors);
 
-        String progressBar = buildProgressBar(peer.getMyBlocks());
+        // --- AQUI A GENTE PASSA O PEER INTEIRO ---
+        String progressBar = buildProgressBar(peer);
         double percentage = (double) peer.getMyBlocks().size() / this.totalBlocks * 100;
         System.out.printf("%s %.2f%%\n\n", progressBar, percentage);
     }
 
-    private String buildProgressBar(Set<Long> myBlocks) {
+    private String buildProgressBar(Peer peer) {
+        PeerStatus status = peer.getStatus();
+        Set<Long> myBlocks = peer.getMyBlocks();
         StringBuilder bar = new StringBuilder("[");
+
+        // Decide a cor dos blocos completos com base no status geral do peer
+        String completedBlockColor;
+        if (status == PeerStatus.SEMEANDO) {
+            completedBlockColor = Constants.ANSI_GREEN;
+        } else {
+            // Qualquer outro status (Baixando, Verificando, etc.) usa amarelo
+            completedBlockColor = Constants.ANSI_YELLOW;
+        }
+
         for (int i = 0; i < Constants.PROGRESS_BAR_WIDTH; i++) {
             long startBlock = (long) (i * blocksPerSlot);
             long endBlock = (long) ((i + 1) * blocksPerSlot);
@@ -74,7 +88,14 @@ public class ProgressDisplay implements Runnable {
                     break;
                 }
             }
-            bar.append(slotComplete ? "█" : "-");
+
+            if (slotComplete) {
+                // Pinta o bloco completo com verde
+                bar.append(completedBlockColor + "█" + Constants.ANSI_RESET);
+            } else {
+                // O bloco incompleto fica na cor padrão (branco/preto)
+                bar.append("-");
+            }
         }
         bar.append("]");
         return bar.toString();

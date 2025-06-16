@@ -145,6 +145,30 @@ public class Tracker {
                     "peers", otherPeers,
                     "blocks", initialBlocks));
         });
+
+        this.app.get("/peers", ctx -> {
+        String peerPortStr = ctx.queryParam("port");
+        if (peerPortStr == null) {
+            ctx.status(400).json(Map.of("error", "Faltando porta do requisitante"));
+            return;
+        }
+        int requesterPort = Integer.parseInt(peerPortStr);
+
+        List<PeerInfo> peerSample;
+        synchronized (this.peers) {
+            peerSample = peers.stream()
+                    .filter(p -> p.port != requesterPort) // Exclui o próprio peer
+                    .collect(Collectors.toList());
+        }
+
+        Collections.shuffle(peerSample);
+
+        if (peerSample.size() > PEER_SAMPLE_SIZE) {
+            peerSample = peerSample.subList(0, PEER_SAMPLE_SIZE);
+        }
+
+        ctx.json(Map.of("peers", peerSample));
+    });
     }
 
     public void stop() {

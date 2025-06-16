@@ -20,11 +20,11 @@ import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import org.apache.commons.codec.digest.DigestUtils;
-
 
 public class Peer extends PeerInfo {
     private static final Logger LOGGER = Logger.getLogger(Peer.class.getName());
@@ -40,12 +40,15 @@ public class Peer extends PeerInfo {
     private final Set<PeerInfo> knownPeers = Collections.synchronizedSet(new HashSet<>());
     private final Set<PeerInfo> unchokedPeers = Collections.synchronizedSet(new HashSet<>());
 
+    private final AtomicReference<PeerStatus> status = new AtomicReference<>(PeerStatus.CONECTANDO);
+
     private Javalin server;
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final Gson gson = new Gson();
-    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
 
-    public Peer(int port, String trackerAddress, String originalFileName, long totalBlocks, long fileSize, String originalChecksum) {
+    public Peer(int port, String trackerAddress, String originalFileName, long totalBlocks, long fileSize,
+            String originalChecksum) {
         super("localhost", port);
         this.id = "peer-" + port;
         this.trackerAddress = trackerAddress;
@@ -57,6 +60,10 @@ public class Peer extends PeerInfo {
 
     public String getId() {
         return this.id;
+    }
+
+    public PeerStatus getStatus() {
+        return this.status.get();
     }
 
     public Set<Long> getMyBlocks() {
@@ -76,6 +83,7 @@ public class Peer extends PeerInfo {
         setupHttpServer();
         registerWithTracker();
         startTitForTatScheduler();
+        startPeerDiscoveryScheduler();
         runLifecycle();
         stop();
     }
@@ -164,16 +172,21 @@ public class Peer extends PeerInfo {
         scheduler.scheduleAtFixedRate(this::updateUnchokedPeers, 5, 10, TimeUnit.SECONDS);
     }
 
+    private void startPeerDiscoveryScheduler() {
+        scheduler.scheduleAtFixedRate(this::fetchNewPeersFromTracker, 30, 30, TimeUnit.SECONDS);
+    }
+
     private void updateUnchokedPeers() {
         if (knownPeers.isEmpty())
             return;
 
         Map<Long, Integer> blockFrequencies = getBlockFrequencies();
-        if (blockFrequencies.isEmpty() && !isComplete()) return;
+        if (blockFrequencies.isEmpty() && !isComplete())
+            return;
 
         Set<Long> rareBlockSet = blockFrequencies.entrySet().stream()
                 .sorted(Map.Entry.comparingByValue())
-                .limit(Math.max(1, (int)(blockFrequencies.size() * 0.3)))
+                .limit(Math.max(1, (int) (blockFrequencies.size() * 0.3)))
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toSet());
 
@@ -204,33 +217,60 @@ public class Peer extends PeerInfo {
         }
     }
 
-    private void runLifecycle() {
-        boolean isSeeding = false;
+    private void fetchNewPeersFromTracker() {
+        if (isComplete()) {
+            // se ja completou, não precisa buscar novos peers
+            return;
+        }
 
+        try {
+            String url = trackerAddress + "/peers?port=" + this.port;
+            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                Type responseType = new TypeToken<Map<String, List<PeerInfo>>>() {
+                }.getType();
+                Map<String, List<PeerInfo>> responseMap = gson.fromJson(response.body(), responseType);
+                List<PeerInfo> newPeers = responseMap.getOrDefault("peers", Collections.emptyList());
+
+                if (!newPeers.isEmpty()) {
+                    int preUpdateCount = knownPeers.size();
+                    synchronized (knownPeers) {
+                        knownPeers.addAll(newPeers);
+                    }
+                    LOGGER.info("[" + id + "] Descobriu " + (knownPeers.size() - preUpdateCount)
+                            + " novos peers. Total conhecido: " + knownPeers.size());
+                }
+            }
+        } catch (IOException | InterruptedException e) {
+            LOGGER.log(Level.WARNING, "[" + id + "] Erro ao buscar novos peers no tracker.", e);
+        }
+    }
+
+    private void runLifecycle() {
         while (true) {
             try {
-                // Enquanto não estiver completo, continua baixando
                 if (!isComplete()) {
+                    if (this.status.get() != PeerStatus.BAIXANDO) {
+                        this.status.set(PeerStatus.BAIXANDO);
+                    }
                     findAndDownloadRarestBlock();
                 } else {
-                    // Após completar, verifica o checksum se ainda não o fez
                     if (!checksumVerified) {
                         checksumVerified = verifyChecksum();
                         if (!checksumVerified) {
-                            // Se o checksum falhar, o peer se reseta e continua o loop para baixar novamente
                             continue;
                         }
                     }
-                    
+
                     // Entra em seeding
-                    if (!isSeeding) {
-                        isSeeding = true;
-                        LOGGER.info("[" + id + "] \uD83C\uDF89 Download completo! Entrando em modo de semeadura (seeding).");
+                    if (this.status.get() != PeerStatus.SEMEANDO) {
+                        this.status.set(PeerStatus.SEMEANDO);
                     }
                 }
                 
-                // O peer continua vivo para semear, dormindo para não consumir CPU
-                Thread.sleep(500);
+                Thread.sleep(125);
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -241,6 +281,7 @@ public class Peer extends PeerInfo {
     }
 
     private boolean verifyChecksum() {
+        this.status.set(PeerStatus.VERIFICANDO);
         LOGGER.info("[" + id + "] Verificando integridade do arquivo...");
         try (InputStream is = Files.newInputStream(Paths.get(this.fileManager.filePath))) {
             String downloadedFileChecksum = DigestUtils.md5Hex(is);
@@ -249,13 +290,18 @@ public class Peer extends PeerInfo {
                 LOGGER.info("[" + id + "] Checksum OK! O arquivo está íntegro.");
                 return true;
             } else {
-                LOGGER.severe("[" + id + "] CORRUPÇÃO DETECTADA! Checksum do arquivo (" + downloadedFileChecksum + ") não bate com o original (" + this.originalChecksum + "). Reiniciando o download.");
+                this.status.set(PeerStatus.CORROMPIDO);
                 this.myBlocks.clear();
+                Thread.sleep(1500);
                 return false;
             }
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, "[" + id + "] Erro ao ler arquivo para verificação de checksum. Reiniciando.", e);
+            this.status.set(PeerStatus.CORROMPIDO);
             this.myBlocks.clear();
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return false;
         }
     }
