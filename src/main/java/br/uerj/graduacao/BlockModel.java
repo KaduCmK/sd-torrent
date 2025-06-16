@@ -1,6 +1,8 @@
 package br.uerj.graduacao;
 
-public class BlockModel {
+import java.io.Serializable;
+
+public class BlockModel implements Serializable {
     private long BLOCK_INDEX;
     private long BLOCK_OFFSET;
     private byte[] data;

@@ -12,7 +12,7 @@ public class Main {
         final String TRACKER_ADDRESS = "http://localhost:" + TRACKER_PORT;
         // ----------------------------------
 
-        Tracker tracker = new Tracker("destiny.mp4");
+        Tracker tracker = new Tracker("luffy.jpeg");
         tracker.start(TRACKER_PORT);
 
         System.out.println("Tracker iniciado em " + TRACKER_ADDRESS);
@@ -25,13 +25,13 @@ public class Main {
         // Loop para criar e conectar os peers
         for (int i = 0; i < NUMBER_OF_PEERS; i++) {
             System.out.println("----------------------------------------");
-            
+
             // Calcula a porta e o ID para o peer atual
             int currentPort = PEER_START_PORT + i;
             String peerId = "peer" + (i + 1);
 
             System.out.println("Iniciando " + peerId + " na porta " + currentPort + "...");
-            
+
             PeerModel peer = new PeerModel("127.0.0.1", currentPort, peerId);
             createdPeers.add(peer);
 
@@ -39,15 +39,28 @@ public class Main {
             peer.connectToTracker(TRACKER_ADDRESS);
 
             // Pausa entre as conexões pra dar tempo de ver os logs
-            Thread.sleep(1000); 
+            Thread.sleep(1000);
         }
 
         System.out.println("----------------------------------------");
         System.out.println("Simulação concluída. Todos os " + createdPeers.size() + " peers foram iniciados.");
+
+        System.out.println("----------------------------------------");
+        System.out.println("Iniciando troca de blocos entre peers...");
         
+        // Pausa para dar tempo de ver os logs
+        Thread.sleep(3000);
+
+        PeerModel peer1 = createdPeers.get(0);
+        PeerModel peer2 = createdPeers.get(1);
+
+        if (!peer2.neighbors.isEmpty()) {
+            peer2.shareAndRequest(peer1);
+        }
+
         tracker.stop();
         System.out.println("Tracker parado.");
-        
+
         // Força o encerramento do programa
         System.exit(0);
     }
