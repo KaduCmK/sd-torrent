@@ -1,9 +1,9 @@
-// kaducmk/sd-torrent/sd-torrent-ae34dccac1204ab615974cc10ff27cf98c7c6569/src/main/java/br/uerj/graduacao/Peer.java
 package br.uerj.graduacao.peer;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
+import br.uerj.graduacao.torrent.Torrent;
 import br.uerj.graduacao.utils.BlockModel;
 import br.uerj.graduacao.utils.Constants;
 import br.uerj.graduacao.utils.FileManager;
@@ -33,12 +33,10 @@ import org.apache.commons.codec.digest.DigestUtils;
 
 public class Peer extends PeerInfo {
     private static final Logger LOGGER = Logger.getLogger(Peer.class.getName());
+    private final FileManager fileManager;
 
     private final String id;
-    private final String trackerAddress;
-    private final FileManager fileManager;
-    private final long totalBlocks;
-    private final String originalChecksum;
+    private final Torrent torrent;
     private boolean checksumVerified = false;
 
     private PeerProgressDisplay progressDisplay;
@@ -55,15 +53,12 @@ public class Peer extends PeerInfo {
     private final Gson gson = new Gson();
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
 
-    public Peer(int port, String trackerAddress, String originalFileName, long totalBlocks, long fileSize,
-            String originalChecksum) {
+    public Peer(int port, Torrent torrent) {
         super("localhost", port);
         this.id = "peer-" + port;
-        this.trackerAddress = trackerAddress;
-        this.totalBlocks = totalBlocks;
-        String peerFileName = originalFileName.replace(".", "-" + port + ".");
-        this.fileManager = new FileManager("./" + peerFileName, fileSize, totalBlocks);
-        this.originalChecksum = originalChecksum;
+        this.torrent = torrent;
+        String peerFileName = torrent.getFileName().replace(".", "-" + port + ".");
+        this.fileManager = new FileManager("./" + peerFileName, torrent.getSize(), torrent.getNumBlocks());
     }
 
     public String getId() {
@@ -87,14 +82,14 @@ public class Peer extends PeerInfo {
     }
 
     public boolean isComplete() {
-        return myBlocks.size() >= totalBlocks;
+        return myBlocks.size() >= torrent.getNumBlocks();
     }
 
     public void start() {
         setupHttpServer();
         registerWithTracker();
 
-        this.progressDisplay = new PeerProgressDisplay(this, totalBlocks);
+        this.progressDisplay = new PeerProgressDisplay(this, torrent.getNumBlocks());
         this.displayThread = new Thread(this.progressDisplay);
         this.displayThread.start();
 
@@ -154,7 +149,7 @@ public class Peer extends PeerInfo {
 
     private void registerWithTracker() {
         try {
-            String url = trackerAddress + "/register?peer_id=" + id + "&port=" + this.port;
+            String url = torrent.getTrackerAddress() + "/register?peer_id=" + id + "&port=" + this.port;
             HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
@@ -237,7 +232,7 @@ public class Peer extends PeerInfo {
 
     private void fetchNewPeersFromTracker() {
         try {
-            String url = trackerAddress + "/peers?port=" + this.port;
+            String url = torrent.getTrackerAddress() + "/peers?port=" + this.port;
             HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
@@ -299,7 +294,7 @@ public class Peer extends PeerInfo {
             Thread.sleep(1000);
             String downloadedFileChecksum = DigestUtils.md5Hex(is);
 
-            if (this.originalChecksum.equals(downloadedFileChecksum)) {
+            if (torrent.getChecksum().equals(downloadedFileChecksum)) {
                 return true;
             } else {
                 this.status.set(PeerStatus.CORROMPIDO);
@@ -408,7 +403,7 @@ public class Peer extends PeerInfo {
 
     private void unregisterFromTracker() {
         try {
-            String url = trackerAddress + "/unregister?port=" + this.port;
+            String url = torrent.getTrackerAddress() + "/unregister?port=" + this.port;
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .POST(BodyPublishers.noBody()) // Usando POST

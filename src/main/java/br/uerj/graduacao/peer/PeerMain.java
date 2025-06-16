@@ -1,5 +1,6 @@
 package br.uerj.graduacao.peer;
 
+import br.uerj.graduacao.torrent.Torrent;
 import br.uerj.graduacao.torrent.TorrentGenerator;
 
 public class PeerMain {
@@ -23,19 +24,13 @@ public class PeerMain {
             peerPort = 8001 + (int) (Math.random() * 1000); // Se não passar, usa aleatória
         }
 
-        TorrentGenerator torrent = TorrentGenerator.getInstance(fileName);
+        Torrent torrent = TorrentGenerator.generateTorrent(trackerAddress, fileName);
         if (torrent.getSize() == 0) {
             System.err.println("Arquivo " + fileName + " nao encontrado ou vazio. Encerrando.");
             return;
         }
 
-        Peer peer = new Peer(
-                peerPort,
-                trackerAddress,
-                fileName,
-                torrent.getNumBlocks(),
-                torrent.getSize(),
-                torrent.getChecksum());
+        Peer peer = new Peer(peerPort, torrent);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             peer.stop();

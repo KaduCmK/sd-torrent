@@ -13,55 +13,34 @@ import br.uerj.graduacao.utils.Constants;
 
 public class TorrentGenerator {
     private static final Logger LOGGER = Logger.getLogger(TorrentGenerator.class.getName());
-    private static TorrentGenerator instance;
-    
-    // public String name;
-    private long numberOfBlocks;
-    private String filePath;
-    private long fileSizeBytes;
-    private String checksum;
 
-    private TorrentGenerator(String filePath) {
-        this.filePath = filePath;
+    public static Torrent generateTorrent(String serverAddress, String filePath) {
         File file = new File(filePath);
 
         if (file.exists()) {
-            this.fileSizeBytes = file.length();
-            this.numberOfBlocks = (long) Math.ceil((double) this.fileSizeBytes / Constants.BLOCK_SIZE_BYTES);
+            try (InputStream is = Files.newInputStream(Paths.get(filePath))) {
+                long fileSizeBytes = file.length();
+                long totalBlocks = (long) Math.ceil((double) fileSizeBytes / Constants.BLOCK_SIZE_BYTES);
 
-            // checksum
-            try(InputStream is = Files.newInputStream(Paths.get(filePath))) {
-                this.checksum = DigestUtils.md5Hex(is);
-            }
-            catch (Exception e) {
+                // checksum
+                String checksum = DigestUtils.md5Hex(is);
+
+                LOGGER.log(Level.INFO, "Generator criado para: {0}", filePath);
+                LOGGER.log(Level.INFO, "Tamanho: {0} bytes, Blocos: {1}",
+                        new Object[] { fileSizeBytes, totalBlocks });
+
+                return new Torrent(serverAddress, file.getName(), totalBlocks, filePath, fileSizeBytes,
+                        checksum);
+            } catch (Exception e) {
                 LOGGER.log(Level.SEVERE, "Erro ao calcular checksum", e);
+                return null;
             }
 
-            LOGGER.log(Level.INFO, "Generator criado para: {0}", this.filePath);
-            LOGGER.log(Level.INFO, "Tamanho: {0} bytes, Blocos: {1}", new Object[]{this.fileSizeBytes, this.numberOfBlocks});
         } else {
             LOGGER.log(Level.SEVERE, "Arquivo nao encontrado: {0}", filePath);
+            return null;
             // If possible -> treat
             // If not -> Raise Exception
         }
-    }
-
-    public static TorrentGenerator getInstance(String filePath) {
-        if (instance == null) {
-            instance = new TorrentGenerator(filePath);
-        }
-        return instance;
-    }
-
-    public long getSize() {
-        return this.fileSizeBytes;
-    }
-
-    public long getNumBlocks() {
-        return this.numberOfBlocks;
-    }
-
-    public String getChecksum() {
-        return this.checksum;
     }
 }

@@ -7,6 +7,7 @@ import br.uerj.graduacao.peer.Peer;
 import br.uerj.graduacao.torrent.TorrentGenerator;
 import br.uerj.graduacao.tracker.Tracker;
 import br.uerj.graduacao.utils.ProgressDisplay;
+import br.uerj.graduacao.torrent.Torrent;
 
 public class Main {
     public static void main(String[] args) throws InterruptedException {
@@ -19,7 +20,7 @@ public class Main {
         // ----------------------------------
 
         // 1. Gera os metadados do torrent a partir do arquivo original
-        TorrentGenerator torrent = TorrentGenerator.getInstance(FILE_NAME);
+        Torrent torrent = TorrentGenerator.generateTorrent(TRACKER_ADDRESS, FILE_NAME);
         if (torrent.getSize() == 0) {
             System.err.println("Arquivo " + FILE_NAME + " nao encontrado ou vazio. Encerrando.");
             return;
@@ -36,13 +37,7 @@ public class Main {
         List<Peer> peers = new ArrayList<>();
         for (int i = 0; i < NUMBER_OF_PEERS; i++) {
             int peerPort = PEER_START_PORT + i;
-            Peer peer = new Peer(
-                    peerPort,
-                    TRACKER_ADDRESS,
-                    FILE_NAME,
-                    torrent.getNumBlocks(),
-                    torrent.getSize(),
-                    torrent.getChecksum());
+            Peer peer = new Peer(peerPort, torrent);
             peers.add(peer);
         }
 

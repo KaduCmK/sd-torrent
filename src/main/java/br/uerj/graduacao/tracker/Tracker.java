@@ -3,6 +3,7 @@ package br.uerj.graduacao.tracker;
 import com.google.gson.Gson;
 
 import br.uerj.graduacao.peer.PeerInfo;
+import br.uerj.graduacao.torrent.Torrent;
 import br.uerj.graduacao.torrent.TorrentGenerator;
 import br.uerj.graduacao.utils.BlockModel;
 import br.uerj.graduacao.utils.FileManager;
@@ -31,7 +32,7 @@ public class Tracker {
     public Tracker(String torrentFilePath) {
         this.peers = Collections.synchronizedSet(new HashSet<>());
 
-        TorrentGenerator torrent = TorrentGenerator.getInstance(torrentFilePath);
+        Torrent torrent = TorrentGenerator.generateTorrent("http://localhost:7000", torrentFilePath);
         this.totalBlocks = torrent.getNumBlocks();
 
         this.fileManager = new FileManager(torrentFilePath, torrent.getSize(), torrent.getNumBlocks());
