@@ -46,7 +46,6 @@ public class FileManager {
         try {
             this.manager.seek(block.pointer());
             this.manager.write(block.getData());
-            // updateProgressBar(block.getBlockIndex(), numberOfBlocks);
         } catch (IOException error) {
             String msg = String.format("Erro de I/O ao escrever bloco (ponteiro: %d) no arquivo %s", block.pointer(),
                     this.filePath);
@@ -58,9 +57,20 @@ public class FileManager {
         BlockModel block = new BlockModel(index);
 
         try {
-            byte[] data = new byte[Constants.BLOCK_SIZE_BYTES];
-            manager.seek(block.pointer());
-            manager.read(data);
+            // --- CORREÇÃO AQUI ---
+            // Calcula o tamanho correto do bloco, especialmente para o último bloco do arquivo.
+            long offset = block.pointer();
+            long bytesToRead = Math.min(Constants.BLOCK_SIZE_BYTES, this.sizeOfFile - offset);
+
+            // Garante que não vamos tentar ler além do arquivo se o tamanho do arquivo for 0
+            if (bytesToRead <= 0) {
+                 block.setData(new byte[0]);
+                 return block;
+            }
+            
+            byte[] data = new byte[(int) bytesToRead];
+            manager.seek(offset);
+            manager.readFully(data); // Usa readFully para garantir que todos os bytes sejam lidos
 
             block.setData(data);
         } catch (IOException error) {

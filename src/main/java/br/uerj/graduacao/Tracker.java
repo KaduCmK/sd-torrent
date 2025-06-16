@@ -1,19 +1,13 @@
 package br.uerj.graduacao;
 
+import com.google.gson.Gson;
 import io.javalin.Javalin;
 import io.javalin.json.JsonMapper;
 import java.lang.reflect.Type;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
-
-import com.google.gson.Gson;
 
 public class Tracker {
     private static final Logger LOGGER = Logger.getLogger(Tracker.class.getName());
@@ -69,7 +63,6 @@ public class Tracker {
             String peerPortStr = ctx.queryParam("port");
             String ip = ctx.ip();
 
-            // checagem de validade dos parametros da requisicao
             if (peerId == null) {
                 ctx.status(400).json(Map.of("error", "Faltando peer_id"));
                 return;
@@ -79,7 +72,6 @@ public class Tracker {
                 return;
             }
 
-            // checagem de porta em uso
             int peerPort;
             try {
                 peerPort = Integer.parseInt(peerPortStr);
@@ -88,41 +80,65 @@ public class Tracker {
                 return;
             }
 
-            if (this.peers.stream().anyMatch(p -> p.port == peerPort)) {
-                ctx.status(400).json(Map.of("error", "Porta ja em uso"));
-                return;
+            synchronized (this.peers) {
+                if (this.peers.stream().anyMatch(p -> p.port == peerPort)) {
+                    ctx.status(400).json(Map.of("error", "Porta ja em uso"));
+                    return;
+                }
+                PeerInfo newPeer = new PeerInfo(ip, peerPort);
+                peers.add(newPeer);
             }
 
-            // adicionando novo peer
-            PeerInfo newPeer = new PeerInfo(ip, peerPort);
-            peers.add(newPeer);
             LOGGER.info("Peer " + peerId + " registrado em " + ip + ":" + peerPort);
 
-            // coletando peers aleatorios para retornar
-            List<PeerInfo> otherPeers = peers.stream()
-                    .filter(peer -> !peer.equals(newPeer))
-                    .collect(Collectors.toList());
+            List<PeerInfo> otherPeers;
+            // Sincroniza a leitura da lista de peers para enviar ao peer que se registrou
+            synchronized (this.peers) {
+                 otherPeers = peers.stream()
+                        .filter(peer -> peer.port != peerPort) // Filtra o próprio peer que fez a requisição
+                        .collect(Collectors.toList());
+            }
+
             if (otherPeers.size() >= PEER_SAMPLE_SIZE) {
                 Collections.shuffle(otherPeers);
                 otherPeers = otherPeers.subList(0, PEER_SAMPLE_SIZE);
             }
 
-            // coletando blocos iniciais para retornar
             Set<BlockModel> initialBlocks = Collections.synchronizedSet(new HashSet<>());
-            if (!remainingIndexesPool.isEmpty()) {
-                int bloocksPerPeer = (int) Math.ceil((double) this.totalBlocks / MINIMUM_NUMBER_OF_PEERS);
-                int blocksToGive = Math.min(bloocksPerPeer, remainingIndexesPool.size());
+            synchronized (remainingIndexesPool) {
+                if (!remainingIndexesPool.isEmpty()) {
+                    int blocksPerPeer = (int) Math.ceil((double) this.totalBlocks / MINIMUM_NUMBER_OF_PEERS);
+                    int blocksToGive = Math.min(blocksPerPeer, remainingIndexesPool.size());
 
-                List<Integer> indexesToGive = remainingIndexesPool.subList(0, blocksToGive);
+                    List<Integer> indexesToGive = new ArrayList<>(remainingIndexesPool.subList(0, blocksToGive));
 
-                for (Integer i : indexesToGive) {
-                    BlockModel newBlock = fileManager.readBlock(i);
-                    initialBlocks.add(newBlock);
+                    for (Integer i : indexesToGive) {
+                        BlockModel newBlock = fileManager.readBlock(i);
+                        initialBlocks.add(newBlock);
+                    }
+                    remainingIndexesPool.subList(0, blocksToGive).clear();
+
+                    LOGGER.info("Distribuindo " + initialBlocks.size() + " blocos para " + peerId + ". Restam "
+                            + remainingIndexesPool.size() + " na pool.");
+                } else {
+                    LOGGER.info("Pool de blocos iniciais vazia. Distribuindo blocos aleatórios...");
+
+                    int blocksToGive = (int) Math.ceil((double) this.totalBlocks / MINIMUM_NUMBER_OF_PEERS);
+                    blocksToGive = (int) Math.min(blocksToGive, this.totalBlocks);
+
+                    List<Long> allBlockIndices = LongStream.range(0, this.totalBlocks)
+                            .boxed()
+                            .collect(Collectors.toList());
+
+                    Collections.shuffle(allBlockIndices);
+                    List<Long> indexesToGive = allBlockIndices.subList(0, blocksToGive);
+
+                    for (Long i : indexesToGive) {
+                        BlockModel newBlock = fileManager.readBlock(i);
+                        initialBlocks.add(newBlock);
+                    }
+                    LOGGER.info("Distribuindo " + initialBlocks.size() + " blocos aleatórios para " + peerId);
                 }
-                remainingIndexesPool.subList(0, blocksToGive).clear();
-
-                LOGGER.info("Distribuindo " + initialBlocks.size() + " blocos para " + peerId + ". Restam "
-                        + remainingIndexesPool.size() + " na pool.");
             }
 
             ctx.json(Map.of(

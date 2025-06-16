@@ -1,8 +1,9 @@
 package br.uerj.graduacao;
 
+import java.io.Serializable;
 import java.util.Objects;
 
-public class PeerInfo {
+public class PeerInfo implements Serializable {
     public String ip;
     public int port;
 
