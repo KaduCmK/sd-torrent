@@ -124,7 +124,6 @@ public class Tracker {
                     LOGGER.info("Pool de blocos iniciais vazia. Distribuindo blocos aleatórios...");
 
                     int blocksToGive = (int) Math.ceil((double) this.totalBlocks / MINIMUM_NUMBER_OF_PEERS);
-                    blocksToGive = (int) Math.min(blocksToGive, this.totalBlocks);
 
                     List<Long> allBlockIndices = LongStream.range(0, this.totalBlocks)
                             .boxed()

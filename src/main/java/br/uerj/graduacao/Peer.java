@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
 
 public class Peer extends PeerInfo {
     private static final Logger LOGGER = Logger.getLogger(Peer.class.getName());
+
     private final String id;
     private final String trackerAddress;
     private final FileManager fileManager;
@@ -33,7 +34,7 @@ public class Peer extends PeerInfo {
 
     private Javalin server;
     private final HttpClient httpClient = HttpClient.newHttpClient();
-    private final Gson gson = new Gson(); // Usa Gson
+    private final Gson gson = new Gson();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
     public Peer(int port, String trackerAddress, String originalFileName, long totalBlocks, long fileSize) {
@@ -55,6 +56,7 @@ public class Peer extends PeerInfo {
     }
 
     private void setupHttpServer() {
+        // Lógica mantida conforme solicitado
         JsonMapper gsonMapper = new JsonMapper() {
             @Override
             public String toJsonString(Object obj, Type type) {
@@ -71,7 +73,9 @@ public class Peer extends PeerInfo {
         }).start(this.port);
 
         server.get("/hello", ctx -> {
-            ctx.json(myBlocks);
+            synchronized (myBlocks) {
+                ctx.json(myBlocks);
+            }
         });
 
         server.get("/request_block/{index}", ctx -> {
@@ -140,24 +144,32 @@ public class Peer extends PeerInfo {
         if (knownPeers.isEmpty())
             return;
 
+        // --- LÓGICA DE UNCHOKE CORRIGIDA E OTIMIZADA ---
         Map<Long, Integer> blockFrequencies = getBlockFrequencies();
-        List<Long> rareBlocks = blockFrequencies.entrySet().stream()
-                .sorted(Map.Entry.comparingByValue())
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
+        if (blockFrequencies.isEmpty()) return;
 
+        // 1. Define "blocos raros" como os 30% menos comuns para focar a pontuação.
+        int rareThreshold = (int) (blockFrequencies.size() * 0.3);
+        Set<Long> rareBlockSet = blockFrequencies.entrySet().stream()
+                .sorted(Map.Entry.comparingByValue())
+                .limit(Math.max(1, rareThreshold)) // Garante que sempre haja pelo menos 1 bloco raro
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet()); // Usa um Set para verificação O(1) (muito rápido)
+
+        // 2. Pontua os peers baseado em quantos blocos raros eles possuem.
         Map<PeerInfo, Integer> peerScores = new HashMap<>();
         for (PeerInfo peer : new ArrayList<>(knownPeers)) {
             Set<Long> peerBlocks = getBlocksFromPeer(peer);
             int score = 0;
             for (Long block : peerBlocks) {
-                if (rareBlocks.contains(block)) {
+                if (rareBlockSet.contains(block)) { // Verificação agora é instantânea
                     score++;
                 }
             }
             peerScores.put(peer, score);
         }
 
+        // 3. Seleciona os 4 peers com maior pontuação.
         List<PeerInfo> sortedPeers = peerScores.entrySet().stream()
                 .sorted(Map.Entry.<PeerInfo, Integer>comparingByValue().reversed())
                 .map(Map.Entry::getKey)
@@ -166,6 +178,7 @@ public class Peer extends PeerInfo {
         unchokedPeers.clear();
         sortedPeers.stream().limit(4).forEach(unchokedPeers::add);
 
+        // 4. Adiciona 1 peer otimista aleatório para dar chance a todos.
         List<PeerInfo> chokedPeers = new ArrayList<>(knownPeers);
         chokedPeers.removeAll(unchokedPeers);
         if (!chokedPeers.isEmpty()) {
@@ -173,37 +186,25 @@ public class Peer extends PeerInfo {
         }
     }
 
-    /**
-     * Novo ciclo de vida do Peer.
-     * Primeiro, foca em baixar o arquivo completo.
-     * Depois, aguarda que todos os seus vizinhos conhecidos também completem o
-     * download antes de se desligar.
-     */
     private void runLifecycle() {
         boolean selfComplete = false;
 
         while (true) {
             try {
-                // FASE 1: Se eu não estou completo, continuo tentando baixar blocos.
                 if (myBlocks.size() < totalBlocks) {
                     findAndDownloadRarestBlock();
                 }
-                // FASE 2: Se eu estou completo, verifico meus vizinhos.
                 else {
                     if (!selfComplete) {
                         selfComplete = true;
                         LOGGER.info("[" + id + "] \uD83C\uDF89 Download completo! Aguardando vizinhos...");
                     }
-
-                    // Verifica se todos os vizinhos terminaram.
                     if (areAllNeighborsComplete()) {
                         LOGGER.info("[" + id + "] Todos os vizinhos completaram o download. Desligando.");
-                        break; // Sai do loop para finalizar o peer.
+                        break;
                     }
                 }
-
-                // Pausa para nao sobrecarregar a rede com verificações
-                Thread.sleep(500);
+                Thread.sleep(250);
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -213,32 +214,16 @@ public class Peer extends PeerInfo {
         }
     }
 
-    /**
-     * Verifica se todos os peers na lista de vizinhos conhecidos já completaram o
-     * download.
-     * 
-     * @return true se todos os vizinhos tiverem todos os blocos, false caso
-     *         contrário.
-     */
     private boolean areAllNeighborsComplete() {
         if (knownPeers.isEmpty()) {
-            return true; // Se não conheço ninguém, considero que posso desligar.
+            return true;
         }
-
-        // Itera sobre uma cópia para evitar problemas de concorrência.
         for (PeerInfo peer : new ArrayList<>(knownPeers)) {
             Set<Long> neighborBlocks = getBlocksFromPeer(peer);
-            // Se o peer não respondeu, a lista de blocos estará vazia e ele será
-            // eventualmente removido.
-            // Se ele respondeu, verifica se ele tem todos os blocos.
             if (neighborBlocks.size() < totalBlocks) {
-                LOGGER.info("[" + id + "] Aguardando " + peer + " (Progresso: " + neighborBlocks.size() + "/"
-                        + totalBlocks + ")");
-                return false; // Encontrou um vizinho que ainda não terminou.
+                return false;
             }
         }
-
-        // Se o loop terminou, todos os vizinhos estão completos.
         return true;
     }
 

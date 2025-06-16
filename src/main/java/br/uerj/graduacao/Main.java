@@ -6,11 +6,11 @@ import java.util.List;
 public class Main {
     public static void main(String[] args) throws InterruptedException {
         // --- CONFIGURAÇÃO DA SIMULAÇÃO ---
-        final int NUMBER_OF_PEERS = 5;
+        final int NUMBER_OF_PEERS = 6;
         final int TRACKER_PORT = 7000;
         final int PEER_START_PORT = 8001;
         final String TRACKER_ADDRESS = "http://localhost:" + TRACKER_PORT;
-        final String FILE_NAME = "luffy.jpeg";
+        final String FILE_NAME = "STARFIELD.jpeg";
         // ----------------------------------
 
         // 1. Gera os metadados do torrent a partir do arquivo original
