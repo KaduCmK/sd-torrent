@@ -12,11 +12,13 @@ public class ProgressDisplay implements Runnable {
     private final List<Peer> peers;
     private final long totalBlocks;
     private final double blocksPerSlot;
+    private final int refreshRateMs;
 
-    public ProgressDisplay(List<Peer> peers, long totalBlocks) {
+    public ProgressDisplay(List<Peer> peers, long totalBlocks, int refreshRateMs) {
         this.peers = peers;
         this.totalBlocks = totalBlocks;
         this.blocksPerSlot = (double) totalBlocks / Constants.PROGRESS_BAR_WIDTH;
+        this.refreshRateMs = refreshRateMs;
     }
 
     @Override
@@ -29,15 +31,8 @@ public class ProgressDisplay implements Runnable {
                     drawPeerStatus(peer);
                 }
 
-                Thread.sleep(Constants.PROGRESS_BAR_REFRESH_RATE_MS);
+                Thread.sleep(refreshRateMs);
             }
-
-            // clearConsole();
-            // for (Peer peer : peers) {
-            // drawPeerStatus(peer);
-            // }
-            // System.out.println("Painel de progresso encerrado.");
-
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             System.out.println("Painel de progresso interrompido.");

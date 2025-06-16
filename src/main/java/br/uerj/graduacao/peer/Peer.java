@@ -38,9 +38,7 @@ public class Peer extends PeerInfo {
     private final String id;
     private final Torrent torrent;
     private boolean checksumVerified = false;
-
-    private PeerProgressDisplay progressDisplay;
-    private Thread displayThread;
+    private int peerCooldownMs = Constants.PEER_INTERNAL_COOLDOWN_MS;
 
     private final Set<Long> myBlocks = Collections.synchronizedSet(new HashSet<>());
     private final Set<PeerInfo> knownPeers = Collections.synchronizedSet(new HashSet<>());
@@ -59,6 +57,11 @@ public class Peer extends PeerInfo {
         this.torrent = torrent;
         String peerFileName = torrent.getFileName().replace(".", "-" + port + ".");
         this.fileManager = new FileManager("./" + peerFileName, torrent.getSize(), torrent.getNumBlocks());
+    }
+
+    public Peer(int port, Torrent torrent, int cooldown) {
+        this(port, torrent);
+        this.peerCooldownMs = cooldown;
     }
 
     public String getId() {
@@ -88,10 +91,6 @@ public class Peer extends PeerInfo {
     public void start() {
         setupHttpServer();
         registerWithTracker();
-
-        this.progressDisplay = new PeerProgressDisplay(this, torrent.getNumBlocks());
-        this.displayThread = new Thread(this.progressDisplay);
-        this.displayThread.start();
 
         startTitForTatScheduler();
         startPeerDiscoveryScheduler();
@@ -278,7 +277,7 @@ public class Peer extends PeerInfo {
                     }
                 }
 
-                Thread.sleep(Constants.PEER_INTERNAL_COOLDOWN_MS);
+                Thread.sleep(peerCooldownMs);
 
             } catch (Exception e) {
                 Thread.currentThread().interrupt();
@@ -426,13 +425,6 @@ public class Peer extends PeerInfo {
         LOGGER.info("[" + id + "] Encerrando...");
 
         unregisterFromTracker();
-
-        if (progressDisplay != null) {
-            progressDisplay.stop();
-        }
-        if (displayThread != null) {
-            displayThread.interrupt();
-        }
 
         scheduler.shutdownNow();
         if (server != null) {

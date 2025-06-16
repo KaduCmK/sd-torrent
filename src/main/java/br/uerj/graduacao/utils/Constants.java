@@ -50,7 +50,7 @@ public final class Constants {
     /**
      * Intervalo de atualização do painel de progresso em milissegundos.
      */
-    public static final int PROGRESS_BAR_REFRESH_RATE_MS = 1000;
+    public static final int PROGRESS_BAR_REFRESH_RATE_MS = 500;
 
     /**
      * Codigo ANSI para resetar a cor do texto.

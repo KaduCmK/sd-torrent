@@ -25,15 +25,26 @@ public class PeerMain {
         }
 
         Torrent torrent = TorrentGenerator.generateTorrent(trackerAddress, fileName);
-        if (torrent.getSize() == 0) {
+        if (torrent == null || torrent.getSize() == 0) {
             System.err.println("Arquivo " + fileName + " nao encontrado ou vazio. Encerrando.");
             return;
         }
 
         Peer peer = new Peer(peerPort, torrent);
+        
+        // Inicia o display de progresso para este peer específico
+        PeerProgressDisplay display = new PeerProgressDisplay(peer, torrent.getNumBlocks());
+        Thread displayThread = new Thread(display);
+        displayThread.start();
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             peer.stop();
+            display.stop(); // Para o display
+            try {
+                displayThread.join();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
             System.out.println("Peer " + peer.getId() + " encerrado.");
         }));
 
