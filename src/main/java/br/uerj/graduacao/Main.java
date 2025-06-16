@@ -10,7 +10,7 @@ public class Main {
         final int TRACKER_PORT = 7000;
         final int PEER_START_PORT = 8001;
         final String TRACKER_ADDRESS = "http://localhost:" + TRACKER_PORT;
-        final String FILE_NAME = "poster.pdf";
+        final String FILE_NAME = "semic.docx";
         // ----------------------------------
 
         // 1. Gera os metadados do torrent a partir do arquivo original
@@ -31,7 +31,13 @@ public class Main {
         List<Peer> peers = new ArrayList<>();
         for (int i = 0; i < NUMBER_OF_PEERS; i++) {
             int peerPort = PEER_START_PORT + i;
-            Peer peer = new Peer(peerPort, TRACKER_ADDRESS, FILE_NAME, torrent.getNumBlocks(), torrent.getSize());
+            Peer peer = new Peer(
+                    peerPort,
+                    TRACKER_ADDRESS,
+                    FILE_NAME,
+                    torrent.getNumBlocks(),
+                    torrent.getSize(),
+                    torrent.getChecksum());
             peers.add(peer);
         }
 

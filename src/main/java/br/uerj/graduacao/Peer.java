@@ -7,11 +7,14 @@ import io.javalin.http.HttpStatus;
 import io.javalin.json.JsonMapper;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Type;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -20,6 +23,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
+import org.apache.commons.codec.digest.DigestUtils;
+
 public class Peer extends PeerInfo {
     private static final Logger LOGGER = Logger.getLogger(Peer.class.getName());
 
@@ -27,6 +32,9 @@ public class Peer extends PeerInfo {
     private final String trackerAddress;
     private final FileManager fileManager;
     private final long totalBlocks;
+
+    private final String originalChecksum;
+    private boolean checksumVerified = false;
 
     private final Set<Long> myBlocks = Collections.synchronizedSet(new HashSet<>());
     private final Set<PeerInfo> knownPeers = Collections.synchronizedSet(new HashSet<>());
@@ -37,11 +45,13 @@ public class Peer extends PeerInfo {
     private final Gson gson = new Gson();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
-    public Peer(int port, String trackerAddress, String originalFileName, long totalBlocks, long fileSize) {
+    public Peer(int port, String trackerAddress, String originalFileName, long totalBlocks, long fileSize,
+            String checksum) {
         super("localhost", port);
         this.id = "peer-" + port;
         this.trackerAddress = trackerAddress;
         this.totalBlocks = totalBlocks;
+        this.originalChecksum = checksum;
         String peerFileName = originalFileName.replace(".", "-" + port + ".");
         this.fileManager = new FileManager("./" + peerFileName, fileSize, totalBlocks);
     }
@@ -162,7 +172,8 @@ public class Peer extends PeerInfo {
 
         // --- LÓGICA DE UNCHOKE CORRIGIDA E OTIMIZADA ---
         Map<Long, Integer> blockFrequencies = getBlockFrequencies();
-        if (blockFrequencies.isEmpty()) return;
+        if (blockFrequencies.isEmpty())
+            return;
 
         // 1. Define "blocos raros" como os 30% menos comuns para focar a pontuação.
         int rareThreshold = (int) (blockFrequencies.size() * 0.3);
@@ -203,30 +214,53 @@ public class Peer extends PeerInfo {
     }
 
     private void runLifecycle() {
-        boolean selfComplete = false;
-
         while (true) {
             try {
-                if (myBlocks.size() < totalBlocks) {
+                if (!isComplete()) {
                     findAndDownloadRarestBlock();
-                }
-                else {
-                    if (!selfComplete) {
-                        selfComplete = true;
-                        LOGGER.info("[" + id + "] \uD83C\uDF89 Download completo! Aguardando vizinhos...");
+                } else {
+                    if (!checksumVerified) {
+                        checksumVerified = verifyChecksum();
+                        // Se a verificação falhar, o peer vai se resetar e recomeçar o download
+                        if (!checksumVerified) {
+                            continue; // Volta pro início do loop pra baixar os blocos de novo
+                        }
                     }
+                    
+                    LOGGER.info("[" + id + "] \uD83C\uDF89 Download completo e verificado! Aguardando vizinhos...");
+
                     if (areAllNeighborsComplete()) {
-                        LOGGER.info("[" + id + "] Todos os vizinhos completaram o download. Desligando.");
+                        LOGGER.info("[" + id + "] Todos os vizinhos completaram o download.");
                         break;
                     }
                 }
-                Thread.sleep(250);
+                Thread.sleep(150);
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 LOGGER.warning("[" + id + "] Loop de vida interrompido.");
                 break;
             }
+        }
+    }
+
+    private boolean verifyChecksum() {
+        LOGGER.info("[" + id + "] Verificando integridade do arquivo...");
+        try (InputStream is = Files.newInputStream(Paths.get(this.fileManager.filePath))) {
+            String downloadedFileChecksum = DigestUtils.md5Hex(is);
+
+            if (this.originalChecksum.equals(downloadedFileChecksum)) {
+                LOGGER.info("[" + id + "] Checksum OK! O arquivo está íntegro.");
+                return true;
+            } else {
+                LOGGER.severe("[" + id + "] CORRUPÇÃO DETECTADA! Checksum do arquivo (" + downloadedFileChecksum + ") não bate com o original (" + this.originalChecksum + "). Reiniciando o download.");
+                this.myBlocks.clear(); // Limpa a lista de blocos que ele tem
+                return false;
+            }
+        } catch (IOException e) {
+            LOGGER.log(Level.SEVERE, "[" + id + "] Erro ao ler arquivo para verificação de checksum. Reiniciando.", e);
+            this.myBlocks.clear();
+            return false;
         }
     }
 

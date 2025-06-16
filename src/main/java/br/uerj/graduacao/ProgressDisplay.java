@@ -7,14 +7,13 @@ import java.util.stream.Collectors;
 public class ProgressDisplay implements Runnable {
     private final List<Peer> peers;
     private final long totalBlocks;
-    private final int progressBarWidth = 200;
     private final double blocksPerSlot;
     private volatile boolean allPeersComplete = false;
 
     public ProgressDisplay(List<Peer> peers, long totalBlocks) {
         this.peers = peers;
         this.totalBlocks = totalBlocks;
-        this.blocksPerSlot = (double) totalBlocks / progressBarWidth;
+        this.blocksPerSlot = (double) totalBlocks / Constants.PROGRESS_BAR_WIDTH;
     }
 
     @Override
@@ -64,7 +63,7 @@ public class ProgressDisplay implements Runnable {
 
     private String buildProgressBar(Set<Long> myBlocks) {
         StringBuilder bar = new StringBuilder("[");
-        for (int i = 0; i < progressBarWidth; i++) {
+        for (int i = 0; i < Constants.PROGRESS_BAR_WIDTH; i++) {
             long startBlock = (long) (i * blocksPerSlot);
             long endBlock = (long) ((i + 1) * blocksPerSlot);
 
