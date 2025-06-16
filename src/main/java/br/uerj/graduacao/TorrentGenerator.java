@@ -1,8 +1,13 @@
 package br.uerj.graduacao;
 
 import java.io.File;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import org.apache.commons.codec.digest.DigestUtils;
 
 public class TorrentGenerator {
     private static final Logger LOGGER = Logger.getLogger(TorrentGenerator.class.getName());
@@ -11,17 +16,27 @@ public class TorrentGenerator {
     // public String name;
     private long numberOfBlocks;
     private String filePath;
-    private long sizeOfFile;
+    private long fileSizeBytes;
+    private String checksum;
 
     private TorrentGenerator(String filePath) {
         this.filePath = filePath;
         File file = new File(filePath);
 
         if (file.exists()) {
-            this.sizeOfFile = file.length();
-            this.numberOfBlocks = (long) Math.ceil((double) this.sizeOfFile / Constants.BLOCK_SIZE_BYTES);
+            this.fileSizeBytes = file.length();
+            this.numberOfBlocks = (long) Math.ceil((double) this.fileSizeBytes / Constants.BLOCK_SIZE_BYTES);
+
+            // checksum
+            try(InputStream is = Files.newInputStream(Paths.get(filePath))) {
+                this.checksum = DigestUtils.md5Hex(is);
+            }
+            catch (Exception e) {
+                LOGGER.log(Level.SEVERE, "Erro ao calcular checksum", e);
+            }
+
             LOGGER.log(Level.INFO, "Generator criado para: {0}", this.filePath);
-            LOGGER.log(Level.INFO, "Tamanho: {0} bytes, Blocos: {1}", new Object[]{this.sizeOfFile, this.numberOfBlocks});
+            LOGGER.log(Level.INFO, "Tamanho: {0} bytes, Blocos: {1}", new Object[]{this.fileSizeBytes, this.numberOfBlocks});
         } else {
             LOGGER.log(Level.SEVERE, "Arquivo nao encontrado: {0}", filePath);
             // If possible -> treat
@@ -37,10 +52,14 @@ public class TorrentGenerator {
     }
 
     public long getSize() {
-        return this.sizeOfFile;
+        return this.fileSizeBytes;
     }
 
     public long getNumBlocks() {
         return this.numberOfBlocks;
+    }
+
+    public String getChecksum() {
+        return this.checksum;
     }
 }

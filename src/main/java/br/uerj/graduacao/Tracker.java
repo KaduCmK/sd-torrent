@@ -11,10 +11,11 @@ import java.util.stream.LongStream;
 
 public class Tracker {
     private static final Logger LOGGER = Logger.getLogger(Tracker.class.getName());
-    private FileManager fileManager;
 
     private static final int MINIMUM_NUMBER_OF_PEERS = 5;
     private static final int PEER_SAMPLE_SIZE = 5;
+
+    private FileManager fileManager;
 
     private final Set<PeerInfo> peers;
     private final long totalBlocks;

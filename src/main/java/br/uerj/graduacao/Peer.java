@@ -46,6 +46,22 @@ public class Peer extends PeerInfo {
         this.fileManager = new FileManager("./" + peerFileName, fileSize, totalBlocks);
     }
 
+    public String getId() {
+        return this.id;
+    }
+
+    public Set<Long> getMyBlocks() {
+        return Collections.unmodifiableSet(myBlocks);
+    }
+
+    public Set<PeerInfo> getUnchokedPeers() {
+        return Collections.unmodifiableSet(unchokedPeers);
+    }
+
+    public boolean isComplete() {
+        return myBlocks.size() >= totalBlocks;
+    }
+
     public void start() {
         LOGGER.info("[" + id + "] Iniciando...");
         setupHttpServer();
@@ -263,8 +279,6 @@ public class Peer extends PeerInfo {
                 BlockModel block = gson.fromJson(response.body(), BlockModel.class);
                 fileManager.writeBlock(block);
                 myBlocks.add(block.getBlockIndex());
-                LOGGER.info("[" + id + "] Baixou o bloco " + blockIndex + " de " + peer + ". Progresso: "
-                        + myBlocks.size() + "/" + totalBlocks);
                 return true;
             }
         } catch (Exception e) {
