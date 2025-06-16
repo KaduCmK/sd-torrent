@@ -270,7 +270,7 @@ public class Peer extends PeerInfo {
                     }
                 }
                 
-                Thread.sleep(125);
+                Thread.sleep(50);
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -290,8 +290,8 @@ public class Peer extends PeerInfo {
                 return true;
             } else {
                 this.status.set(PeerStatus.CORROMPIDO);
-                this.myBlocks.clear();
                 Thread.sleep(2000);
+                this.myBlocks.clear();
                 return false;
             }
         } catch (IOException e) {

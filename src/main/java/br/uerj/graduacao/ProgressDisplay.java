@@ -8,7 +8,6 @@ public class ProgressDisplay implements Runnable {
     private final List<Peer> peers;
     private final long totalBlocks;
     private final double blocksPerSlot;
-    private volatile boolean allPeersComplete = false;
 
     public ProgressDisplay(List<Peer> peers, long totalBlocks) {
         this.peers = peers;
@@ -19,27 +18,21 @@ public class ProgressDisplay implements Runnable {
     @Override
     public void run() {
         try {
-            while (!allPeersComplete) {
+            while (true) {
                 clearConsole();
-                boolean allDoneCurrentCycle = true;
 
                 for (Peer peer : peers) {
                     drawPeerStatus(peer);
-                    if (!peer.isComplete()) {
-                        allDoneCurrentCycle = false;
-                    }
                 }
 
-                allPeersComplete = allDoneCurrentCycle;
                 Thread.sleep(Constants.PROGRESS_BAR_REFRESH_RATE_MS);
             }
-            // Desenha uma última vez para mostrar 100% em tudo
-            Thread.sleep(100);
-            clearConsole();
-            for (Peer peer : peers) {
-                drawPeerStatus(peer);
-            }
-            System.out.println("Painel de progresso encerrado.");
+
+            // clearConsole();
+            // for (Peer peer : peers) {
+            // drawPeerStatus(peer);
+            // }
+            // System.out.println("Painel de progresso encerrado.");
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -49,16 +42,36 @@ public class ProgressDisplay implements Runnable {
 
     private void drawPeerStatus(Peer peer) {
         String peerId = peer.getId();
-        String status = peer.getStatus().toString();
+        PeerStatus peerStatusEnum = peer.getStatus();
+        String statusString = peerStatusEnum.toString();
+
+        String statusColor;
+        switch (peerStatusEnum) {
+            case BAIXANDO:
+            case VERIFICANDO:
+                statusColor = Constants.ANSI_YELLOW;
+                break;
+            case SEMEANDO:
+                statusColor = Constants.ANSI_GREEN;
+                break;
+            case CORROMPIDO:
+                statusColor = Constants.ANSI_RED;
+                break;
+            default:
+                statusColor = Constants.ANSI_RESET;
+                break;
+        }
+
+        String coloredStatus = statusColor + String.format("%-15s", statusString) + Constants.ANSI_RESET;
+
         Set<PeerInfo> unchoked = peer.getUnchokedPeers();
         String neighbors = unchoked.stream()
                 .limit(5)
                 .map(p -> "peer-" + p.port)
                 .collect(Collectors.joining(", "));
 
-        System.out.printf("Peer: %-12s | Status: %-15s | Vizinhos (Unchoked): %s\n", peerId, status, neighbors);
+        System.out.printf("Peer: %-12s | Status: %s | Vizinhos (Unchoked): %s\n", peerId, coloredStatus, neighbors);
 
-        // --- AQUI A GENTE PASSA O PEER INTEIRO ---
         String progressBar = buildProgressBar(peer);
         double percentage = (double) peer.getMyBlocks().size() / this.totalBlocks * 100;
         System.out.printf("%s %.2f%%\n\n", progressBar, percentage);
@@ -69,13 +82,17 @@ public class ProgressDisplay implements Runnable {
         Set<Long> myBlocks = peer.getMyBlocks();
         StringBuilder bar = new StringBuilder("[");
 
-        // Decide a cor dos blocos completos com base no status geral do peer
         String completedBlockColor;
-        if (status == PeerStatus.SEMEANDO) {
-            completedBlockColor = Constants.ANSI_GREEN;
-        } else {
-            // Qualquer outro status (Baixando, Verificando, etc.) usa amarelo
-            completedBlockColor = Constants.ANSI_YELLOW;
+        switch (status) {
+            case SEMEANDO:
+                completedBlockColor = Constants.ANSI_GREEN;
+                break;
+            case CORROMPIDO:
+                completedBlockColor = Constants.ANSI_RED;
+                break;
+            default: // BAIXANDO, VERIFICANDO, CONECTANDO
+                completedBlockColor = Constants.ANSI_YELLOW;
+                break;
         }
 
         for (int i = 0; i < Constants.PROGRESS_BAR_WIDTH; i++) {
@@ -91,10 +108,8 @@ public class ProgressDisplay implements Runnable {
             }
 
             if (slotComplete) {
-                // Pinta o bloco completo com verde
-                bar.append(completedBlockColor + "█" + Constants.ANSI_RESET);
+                bar.append(completedBlockColor).append("█").append(Constants.ANSI_RESET);
             } else {
-                // O bloco incompleto fica na cor padrão (branco/preto)
                 bar.append("-");
             }
         }
