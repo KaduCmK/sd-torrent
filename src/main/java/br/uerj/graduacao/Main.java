@@ -4,9 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import br.uerj.graduacao.peer.Peer;
+import br.uerj.graduacao.torrent.TorrentGenerator;
 import br.uerj.graduacao.tracker.Tracker;
 import br.uerj.graduacao.utils.ProgressDisplay;
-import br.uerj.graduacao.utils.TorrentGenerator;
 
 public class Main {
     public static void main(String[] args) throws InterruptedException {

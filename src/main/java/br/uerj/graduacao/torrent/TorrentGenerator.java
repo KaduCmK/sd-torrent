@@ -1,4 +1,4 @@
-package br.uerj.graduacao.utils;
+package br.uerj.graduacao.torrent;
 
 import java.io.File;
 import java.io.InputStream;
@@ -9,7 +9,7 @@ import java.util.logging.Logger;
 
 import org.apache.commons.codec.digest.DigestUtils;
 
-import br.uerj.graduacao.Constants;
+import br.uerj.graduacao.utils.Constants;
 
 public class TorrentGenerator {
     private static final Logger LOGGER = Logger.getLogger(TorrentGenerator.class.getName());

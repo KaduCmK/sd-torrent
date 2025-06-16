@@ -4,8 +4,8 @@ package br.uerj.graduacao.peer;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
-import br.uerj.graduacao.Constants;
 import br.uerj.graduacao.utils.BlockModel;
+import br.uerj.graduacao.utils.Constants;
 import br.uerj.graduacao.utils.FileManager;
 import io.javalin.Javalin;
 import io.javalin.http.HttpStatus;
@@ -17,6 +17,7 @@ import java.lang.reflect.Type;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
+import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -39,6 +40,9 @@ public class Peer extends PeerInfo {
     private final long totalBlocks;
     private final String originalChecksum;
     private boolean checksumVerified = false;
+
+    private PeerProgressDisplay progressDisplay;
+    private Thread displayThread;
 
     private final Set<Long> myBlocks = Collections.synchronizedSet(new HashSet<>());
     private final Set<PeerInfo> knownPeers = Collections.synchronizedSet(new HashSet<>());
@@ -78,14 +82,22 @@ public class Peer extends PeerInfo {
         return Collections.unmodifiableSet(unchokedPeers);
     }
 
+    public int getKnownPeersCount() {
+        return this.knownPeers.size();
+    }
+
     public boolean isComplete() {
         return myBlocks.size() >= totalBlocks;
     }
 
     public void start() {
-        LOGGER.info("[" + id + "] Iniciando...");
         setupHttpServer();
         registerWithTracker();
+
+        this.progressDisplay = new PeerProgressDisplay(this, totalBlocks);
+        this.displayThread = new Thread(this.progressDisplay);
+        this.displayThread.start();
+
         startTitForTatScheduler();
         startPeerDiscoveryScheduler();
         runLifecycle();
@@ -173,11 +185,13 @@ public class Peer extends PeerInfo {
     }
 
     private void startTitForTatScheduler() {
-        scheduler.scheduleAtFixedRate(this::updateUnchokedPeers, 5, 10, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(this::updateUnchokedPeers, 5, Constants.PEER_UNCHOKE_INTERVAL_SECONDS,
+                TimeUnit.SECONDS);
     }
 
     private void startPeerDiscoveryScheduler() {
-        scheduler.scheduleAtFixedRate(this::fetchNewPeersFromTracker, 30, 30, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(this::fetchNewPeersFromTracker, 15, Constants.PEER_DISCOVERY_INTERVAL_SECONDS,
+                TimeUnit.SECONDS);
     }
 
     private void updateUnchokedPeers() {
@@ -222,11 +236,6 @@ public class Peer extends PeerInfo {
     }
 
     private void fetchNewPeersFromTracker() {
-        if (isComplete()) {
-            // se ja completou, não precisa buscar novos peers
-            return;
-        }
-
         try {
             String url = trackerAddress + "/peers?port=" + this.port;
             HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).build();
@@ -273,7 +282,7 @@ public class Peer extends PeerInfo {
                         this.status.set(PeerStatus.SEMEANDO);
                     }
                 }
-                
+
                 Thread.sleep(Constants.PEER_INTERNAL_COOLDOWN_MS);
 
             } catch (Exception e) {
@@ -397,12 +406,50 @@ public class Peer extends PeerInfo {
         return unchokedPeers.stream().anyMatch(p -> p.port == peer.port);
     }
 
+    private void unregisterFromTracker() {
+        try {
+            String url = trackerAddress + "/unregister?port=" + this.port;
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .POST(BodyPublishers.noBody()) // Usando POST
+                    .build();
+
+            httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .thenAccept(response -> {
+                        if (response.statusCode() == 200) {
+                            LOGGER.info("[" + id + "] Descadastrado do tracker com sucesso.");
+                        } else {
+                            LOGGER.warning("[" + id + "] Falha ao descadastrar do tracker: " + response.body());
+                        }
+                    });
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "[" + id + "] Erro ao enviar pedido de unregister.", e);
+        }
+    }
+
     public void stop() {
         LOGGER.info("[" + id + "] Encerrando...");
+
+        unregisterFromTracker();
+
+        if (progressDisplay != null) {
+            progressDisplay.stop();
+        }
+        if (displayThread != null) {
+            displayThread.interrupt();
+        }
+
         scheduler.shutdownNow();
         if (server != null) {
             server.stop();
         }
+        // Pequeno delay pra dar tempo da requisição de unregister ser enviada
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
         LOGGER.info("[" + id + "] Desligado.");
     }
 }

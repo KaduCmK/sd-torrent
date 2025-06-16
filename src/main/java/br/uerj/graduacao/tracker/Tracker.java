@@ -3,9 +3,9 @@ package br.uerj.graduacao.tracker;
 import com.google.gson.Gson;
 
 import br.uerj.graduacao.peer.PeerInfo;
+import br.uerj.graduacao.torrent.TorrentGenerator;
 import br.uerj.graduacao.utils.BlockModel;
 import br.uerj.graduacao.utils.FileManager;
-import br.uerj.graduacao.utils.TorrentGenerator;
 import io.javalin.Javalin;
 import io.javalin.json.JsonMapper;
 import java.lang.reflect.Type;
@@ -100,7 +100,7 @@ public class Tracker {
             List<PeerInfo> otherPeers;
             // Sincroniza a leitura da lista de peers para enviar ao peer que se registrou
             synchronized (this.peers) {
-                 otherPeers = peers.stream()
+                otherPeers = peers.stream()
                         .filter(peer -> peer.port != peerPort) // Filtra o próprio peer que fez a requisição
                         .collect(Collectors.toList());
             }
@@ -152,28 +152,68 @@ public class Tracker {
         });
 
         this.app.get("/peers", ctx -> {
-        String peerPortStr = ctx.queryParam("port");
-        if (peerPortStr == null) {
-            ctx.status(400).json(Map.of("error", "Faltando porta do requisitante"));
-            return;
-        }
-        int requesterPort = Integer.parseInt(peerPortStr);
+            String peerPortStr = ctx.queryParam("port");
+            if (peerPortStr == null) {
+                ctx.status(400).json(Map.of("error", "Faltando porta do requisitante"));
+                return;
+            }
+            int requesterPort = Integer.parseInt(peerPortStr);
 
-        List<PeerInfo> peerSample;
+            List<PeerInfo> peerSample;
+            synchronized (this.peers) {
+                peerSample = peers.stream()
+                        .filter(p -> p.port != requesterPort) // Exclui o próprio peer
+                        .collect(Collectors.toList());
+            }
+
+            Collections.shuffle(peerSample);
+
+            if (peerSample.size() > PEER_SAMPLE_SIZE) {
+                peerSample = peerSample.subList(0, PEER_SAMPLE_SIZE);
+            }
+
+            ctx.json(Map.of("peers", peerSample));
+        });
+
+        this.app.post("/unregister", ctx -> {
+            String peerPortStr = ctx.queryParam("port");
+            if (peerPortStr == null) {
+                ctx.status(400).json(Map.of("error", "Faltando porta"));
+                return;
+            }
+
+            try {
+                int peerPort = Integer.parseInt(peerPortStr);
+                boolean removed = this.peers.removeIf(p -> p.port == peerPort);
+
+                if (removed) {
+                    LOGGER.info("Peer na porta " + peerPort + " se desconectou.");
+                    ctx.status(200).json(Map.of("message", "Peer removido com sucesso"));
+                } else {
+                    ctx.status(404).json(Map.of("error", "Peer nao encontrado"));
+                }
+            } catch (NumberFormatException e) {
+                ctx.status(400).json(Map.of("error", "Porta invalida"));
+            }
+        });
+    }
+
+    public void displayPeerStatus() {
+        System.out.print("\033[H\033[2J");
+        System.out.flush();
+        System.out.println("--- PAINEL DO TRACKER ---");
+        System.out.println("Arquivo: " + this.fileManager.name);
+        System.out.println("Total de Blocos: " + this.totalBlocks);
+        System.out.println("Peers Conectados: " + this.peers.size());
+        System.out.println("-------------------------");
         synchronized (this.peers) {
-            peerSample = peers.stream()
-                    .filter(p -> p.port != requesterPort) // Exclui o próprio peer
-                    .collect(Collectors.toList());
+            if (this.peers.isEmpty()) {
+                System.out.println("Nenhum peer conectado.");
+            } else {
+                this.peers.forEach(peer -> System.out.println("- " + peer));
+            }
         }
-
-        Collections.shuffle(peerSample);
-
-        if (peerSample.size() > PEER_SAMPLE_SIZE) {
-            peerSample = peerSample.subList(0, PEER_SAMPLE_SIZE);
-        }
-
-        ctx.json(Map.of("peers", peerSample));
-    });
+        System.out.println("-------------------------");
     }
 
     public void stop() {

@@ -2,8 +2,6 @@ package br.uerj.graduacao.utils;
 
 import java.io.Serializable;
 
-import br.uerj.graduacao.Constants;
-
 public class BlockModel implements Serializable {
     private long BLOCK_INDEX;
     private long BLOCK_OFFSET;

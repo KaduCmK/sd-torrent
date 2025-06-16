@@ -1,50 +1,41 @@
-package br.uerj.graduacao.utils;
+package br.uerj.graduacao.peer;
 
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import br.uerj.graduacao.peer.Peer;
-import br.uerj.graduacao.peer.PeerInfo;
-import br.uerj.graduacao.peer.PeerStatus;
+import br.uerj.graduacao.utils.Constants;
 
-public class ProgressDisplay implements Runnable {
-    private final List<Peer> peers;
+public class PeerProgressDisplay implements Runnable {
+    private final Peer peer;
     private final long totalBlocks;
     private final double blocksPerSlot;
+    private volatile boolean running = true;
 
-    public ProgressDisplay(List<Peer> peers, long totalBlocks) {
-        this.peers = peers;
+    public PeerProgressDisplay(Peer peer, long totalBlocks) {
+        this.peer = peer;
         this.totalBlocks = totalBlocks;
         this.blocksPerSlot = (double) totalBlocks / Constants.PROGRESS_BAR_WIDTH;
     }
 
+    public void stop() {
+        this.running = false;
+    }
+
     @Override
     public void run() {
-        try {
-            while (true) {
+        while (running) {
+            try {
                 clearConsole();
-
-                for (Peer peer : peers) {
-                    drawPeerStatus(peer);
-                }
-
+                drawPeerStatus();
                 Thread.sleep(Constants.PROGRESS_BAR_REFRESH_RATE_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                running = false;
             }
-
-            // clearConsole();
-            // for (Peer peer : peers) {
-            // drawPeerStatus(peer);
-            // }
-            // System.out.println("Painel de progresso encerrado.");
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            System.out.println("Painel de progresso interrompido.");
         }
     }
 
-    private void drawPeerStatus(Peer peer) {
+    private void drawPeerStatus() {
         String peerId = peer.getId();
         PeerStatus peerStatusEnum = peer.getStatus();
         String statusString = peerStatusEnum.toString();
@@ -74,14 +65,17 @@ public class ProgressDisplay implements Runnable {
                 .map(p -> "peer-" + p.port)
                 .collect(Collectors.joining(", "));
 
-        System.out.printf("Peer: %-12s | Status: %s | Vizinhos (Unchoked): %s\n", peerId, coloredStatus, neighbors);
+        int knownPeersCount = peer.getKnownPeersCount();
 
-        String progressBar = buildProgressBar(peer);
+        System.out.printf("Peer: %-12s | Status: %s | Peers conhecidos: %-3d | Vizinhos (Unchoked): %s\n",
+                peerId, coloredStatus, knownPeersCount, neighbors);
+
+        String progressBar = buildProgressBar();
         double percentage = (double) peer.getMyBlocks().size() / this.totalBlocks * 100;
         System.out.printf("%s %.2f%%\n\n", progressBar, percentage);
     }
 
-    private String buildProgressBar(Peer peer) {
+    private String buildProgressBar() {
         PeerStatus status = peer.getStatus();
         Set<Long> myBlocks = peer.getMyBlocks();
         StringBuilder bar = new StringBuilder("[");
