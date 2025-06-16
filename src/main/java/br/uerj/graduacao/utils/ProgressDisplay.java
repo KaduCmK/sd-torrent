@@ -1,8 +1,13 @@
-package br.uerj.graduacao;
+package br.uerj.graduacao.utils;
 
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import br.uerj.graduacao.Constants;
+import br.uerj.graduacao.peer.Peer;
+import br.uerj.graduacao.peer.PeerInfo;
+import br.uerj.graduacao.peer.PeerStatus;
 
 public class ProgressDisplay implements Runnable {
     private final List<Peer> peers;

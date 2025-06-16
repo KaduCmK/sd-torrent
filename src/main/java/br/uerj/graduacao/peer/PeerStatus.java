@@ -1,4 +1,4 @@
-package br.uerj.graduacao;
+package br.uerj.graduacao.peer;
 
 public enum PeerStatus {
     CONECTANDO("Conectando..."),

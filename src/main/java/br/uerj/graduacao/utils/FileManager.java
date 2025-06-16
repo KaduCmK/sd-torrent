@@ -1,10 +1,12 @@
-package br.uerj.graduacao;
+package br.uerj.graduacao.utils;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import br.uerj.graduacao.Constants;
 
 public class FileManager {
     private static final Logger LOGGER = Logger.getLogger(FileManager.class.getName());

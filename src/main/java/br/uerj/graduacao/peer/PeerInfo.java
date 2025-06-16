@@ -1,4 +1,4 @@
-package br.uerj.graduacao;
+package br.uerj.graduacao.peer;
 
 import java.io.Serializable;
 import java.util.Objects;

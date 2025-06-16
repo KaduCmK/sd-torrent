@@ -1,6 +1,11 @@
-package br.uerj.graduacao;
+package br.uerj.graduacao.tracker;
 
 import com.google.gson.Gson;
+
+import br.uerj.graduacao.peer.PeerInfo;
+import br.uerj.graduacao.utils.BlockModel;
+import br.uerj.graduacao.utils.FileManager;
+import br.uerj.graduacao.utils.TorrentGenerator;
 import io.javalin.Javalin;
 import io.javalin.json.JsonMapper;
 import java.lang.reflect.Type;

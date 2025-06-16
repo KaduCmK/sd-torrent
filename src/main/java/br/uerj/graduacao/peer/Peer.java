@@ -1,8 +1,12 @@
 // kaducmk/sd-torrent/sd-torrent-ae34dccac1204ab615974cc10ff27cf98c7c6569/src/main/java/br/uerj/graduacao/Peer.java
-package br.uerj.graduacao;
+package br.uerj.graduacao.peer;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+
+import br.uerj.graduacao.Constants;
+import br.uerj.graduacao.utils.BlockModel;
+import br.uerj.graduacao.utils.FileManager;
 import io.javalin.Javalin;
 import io.javalin.http.HttpStatus;
 import io.javalin.json.JsonMapper;
