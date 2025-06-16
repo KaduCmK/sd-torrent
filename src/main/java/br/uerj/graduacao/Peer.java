@@ -270,9 +270,9 @@ public class Peer extends PeerInfo {
                     }
                 }
                 
-                Thread.sleep(50);
+                Thread.sleep(Constants.PEER_INTERNAL_COOLDOWN_MS);
 
-            } catch (InterruptedException e) {
+            } catch (Exception e) {
                 Thread.currentThread().interrupt();
                 LOGGER.warning("[" + id + "] Loop de vida interrompido. Desligando.");
                 break;
