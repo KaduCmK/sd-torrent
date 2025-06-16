@@ -19,7 +19,7 @@ public class TorrentGenerator {
 
         if (file.exists()) {
             this.sizeOfFile = file.length();
-            this.numberOfBlocks = (this.sizeOfFile / Constants.BLOCK_SIZE_BYTES);
+            this.numberOfBlocks = (long) Math.ceil((double) this.sizeOfFile / Constants.BLOCK_SIZE_BYTES);
             LOGGER.log(Level.INFO, "Generator criado para: {0}", this.filePath);
             LOGGER.log(Level.INFO, "Tamanho: {0} bytes, Blocos: {1}", new Object[]{this.sizeOfFile, this.numberOfBlocks});
         } else {
