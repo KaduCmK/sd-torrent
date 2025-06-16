@@ -17,13 +17,14 @@ import com.google.gson.Gson;
 
 public class Tracker {
     private static final Logger LOGGER = Logger.getLogger(Tracker.class.getName());
+    private FileManager fileManager;
 
     private static final int MINIMUM_NUMBER_OF_PEERS = 5;
     private static final int PEER_SAMPLE_SIZE = 5;
 
     private final Set<PeerModel> peers;
     private final long totalBlocks;
-    private final List<Integer> remainingBlocksPool;
+    private final List<Integer> remainingIndexesPool;
 
     private Javalin app;
 
@@ -32,12 +33,15 @@ public class Tracker {
 
         TorrentGenerator torrent = TorrentGenerator.getInstance(torrentFilePath);
         this.totalBlocks = torrent.getNumBlocks();
+
+        this.fileManager = new FileManager(torrentFilePath, torrent.getSize(), torrent.getNumBlocks());
+
         LOGGER.info("Tracker iniciado. Total de blocos: " + this.totalBlocks);
 
-        this.remainingBlocksPool = Collections.synchronizedList(new ArrayList<>());
-        LongStream.range(0, this.totalBlocks).forEach(i -> remainingBlocksPool.add((int) i));
-        Collections.shuffle(remainingBlocksPool);
-        LOGGER.info("Lista de " + remainingBlocksPool.size() + " blocos foi criada e embaralhada para distribuição.");
+        this.remainingIndexesPool = Collections.synchronizedList(new ArrayList<>());
+        LongStream.range(0, this.totalBlocks).forEach(i -> remainingIndexesPool.add((int) i));
+        Collections.shuffle(remainingIndexesPool);
+        LOGGER.info("Lista de " + remainingIndexesPool.size() + " blocos foi criada e embaralhada para distribuição.");
     }
 
     public void start(int trackerPort) {
@@ -104,14 +108,19 @@ public class Tracker {
             }
 
             // coletando blocos iniciais para retornar
-            List<Integer> initialBlocks = new ArrayList<>();
-            if (!remainingBlocksPool.isEmpty()) {
+            Set<BlockModel> initialBlocks = Collections.synchronizedSet(new HashSet<>());
+            if (!remainingIndexesPool.isEmpty()) {
                 int bloocksPerPeer = (int) Math.ceil((double) this.totalBlocks / MINIMUM_NUMBER_OF_PEERS);
-                int blocksToGive = Math.min(bloocksPerPeer, remainingBlocksPool.size());
-                initialBlocks.addAll(remainingBlocksPool.subList(0, blocksToGive));
-                remainingBlocksPool.subList(0, blocksToGive).clear();
+                int blocksToGive = Math.min(bloocksPerPeer, remainingIndexesPool.size());
 
-                LOGGER.info("Distribuindo " + initialBlocks.size() + " blocos para " + peerId + ". Restam " + remainingBlocksPool.size() + " na pool.");
+                for (int i = 0; i < blocksToGive; i++) {
+                    BlockModel newBlock = fileManager.readBlock(i);
+                    initialBlocks.add(newBlock);
+                }
+                remainingIndexesPool.subList(0, blocksToGive).clear();
+
+                LOGGER.info("Distribuindo " + initialBlocks.size() + " blocos para " + peerId + ". Restam "
+                        + remainingIndexesPool.size() + " na pool.");
             }
 
             ctx.json(Map.of(

@@ -36,6 +36,7 @@ public class PeerModel {
             int responseCode = connection.getResponseCode();
 
             if (responseCode == 200) {
+                Gson gson = new Gson();
                 InputStreamReader reader = new InputStreamReader(connection.getInputStream());
                 JsonObject response = JsonParser.parseReader(reader).getAsJsonObject();
                 JsonArray peers = response.getAsJsonArray("peers");
@@ -51,12 +52,13 @@ public class PeerModel {
                     PeerModel p = new PeerModel(peerIp, peerPort);
                     this.neighbors.add(p);
                 }
-                JsonArray blocks = response.getAsJsonArray("blocks");
 
+                JsonArray blocks = response.getAsJsonArray("blocks");
                 for (JsonElement element : blocks) {
-                    BlockModel b = new BlockModel(element.getAsLong());
-                    this.ownedBlocks.add(b);
+                    BlockModel block = gson.fromJson(element, BlockModel.class);
+                    this.ownedBlocks.add(block);
                 }
+
                 System.out.println("Peer [" + this.id + "] conectado ao tracker com sucesso!");
                 System.out.println("Peers vizinhos: " + neighbors.toString());
                 System.out.println("Blocos iniciais recebidos: " + ownedBlocks.toString());
