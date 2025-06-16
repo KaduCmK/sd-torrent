@@ -22,7 +22,7 @@ public class Tracker {
     private static final int MINIMUM_NUMBER_OF_PEERS = 5;
     private static final int PEER_SAMPLE_SIZE = 5;
 
-    private final Set<PeerModel> peers;
+    private final Set<PeerInfo> peers;
     private final long totalBlocks;
     private final List<Integer> remainingIndexesPool;
 
@@ -94,12 +94,12 @@ public class Tracker {
             }
 
             // adicionando novo peer
-            PeerModel newPeer = new PeerModel(ip, peerPort, peerId);
+            PeerInfo newPeer = new PeerInfo(ip, peerPort);
             peers.add(newPeer);
             LOGGER.info("Peer " + peerId + " registrado em " + ip + ":" + peerPort);
 
             // coletando peers aleatorios para retornar
-            List<PeerModel> otherPeers = peers.stream()
+            List<PeerInfo> otherPeers = peers.stream()
                     .filter(peer -> !peer.equals(newPeer))
                     .collect(Collectors.toList());
             if (otherPeers.size() >= PEER_SAMPLE_SIZE) {
@@ -113,7 +113,9 @@ public class Tracker {
                 int bloocksPerPeer = (int) Math.ceil((double) this.totalBlocks / MINIMUM_NUMBER_OF_PEERS);
                 int blocksToGive = Math.min(bloocksPerPeer, remainingIndexesPool.size());
 
-                for (int i = 0; i < blocksToGive; i++) {
+                List<Integer> indexesToGive = remainingIndexesPool.subList(0, blocksToGive);
+
+                for (Integer i : indexesToGive) {
                     BlockModel newBlock = fileManager.readBlock(i);
                     initialBlocks.add(newBlock);
                 }

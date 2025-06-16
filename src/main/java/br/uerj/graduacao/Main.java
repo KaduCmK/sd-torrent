@@ -1,7 +1,10 @@
 package br.uerj.graduacao;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 public class Main {
     public static void main(String[] args) throws InterruptedException {
@@ -12,6 +15,8 @@ public class Main {
         final String TRACKER_ADDRESS = "http://localhost:" + TRACKER_PORT;
         // ----------------------------------
 
+        TorrentGenerator torrent = TorrentGenerator.getInstance("luffy.jpeg");
+
         Tracker tracker = new Tracker("luffy.jpeg");
         tracker.start(TRACKER_PORT);
 
@@ -20,9 +25,7 @@ public class Main {
         Thread.sleep(1000);
 
         // Lista para guardar os peers criados, caso precise usar depois
-        List<PeerModel> createdPeers = new ArrayList<>();
-
-        // Loop para criar e conectar os peers
+        List<Peer> createdPeers = new ArrayList<>();
         for (int i = 0; i < NUMBER_OF_PEERS; i++) {
             System.out.println("----------------------------------------");
 
@@ -32,30 +35,47 @@ public class Main {
 
             System.out.println("Iniciando " + peerId + " na porta " + currentPort + "...");
 
-            PeerModel peer = new PeerModel("127.0.0.1", currentPort, peerId);
+            FileManager fileManager = new FileManager("luffy.jpeg", torrent.getSize(), torrent.getNumBlocks());
+
+            Peer peer = new Peer("127.0.0.1", currentPort, peerId, fileManager);
             createdPeers.add(peer);
 
             peer.startServer();
             peer.connectToTracker(TRACKER_ADDRESS);
 
             // Pausa entre as conexões pra dar tempo de ver os logs
-            Thread.sleep(1000);
+            Thread.sleep(750);
         }
 
         System.out.println("----------------------------------------");
-        System.out.println("Simulação concluída. Todos os " + createdPeers.size() + " peers foram iniciados.");
-
+        System.out.println("INICIANDO TESTE DE TROCA DE BLOCOS");
         System.out.println("----------------------------------------");
-        System.out.println("Iniciando troca de blocos entre peers...");
-        
-        // Pausa para dar tempo de ver os logs
-        Thread.sleep(3000);
+        Thread.sleep(1000);
 
-        PeerModel peer1 = createdPeers.get(0);
-        PeerModel peer2 = createdPeers.get(1);
+        Peer peer1 = createdPeers.get(0);
+        Peer peer2 = createdPeers.get(1);
 
-        if (!peer2.neighbors.isEmpty()) {
-            peer2.shareAndRequest(peer1);
+        if (!peer2.ownedBlocks.isEmpty()) {
+            // 1. Peer 1 pede a lista de blocos do Peer 2
+            List<Long> peer2BlockList = peer1.requestBlockListFrom(new Peer(peer2.id, peer2.port, peer2.ip, null));
+
+            // 2. Peer 1 encontra um bloco que ele não tem, mas o Peer 2 tem
+            Set<Long> peer1OwnedIndexes = new HashSet<>();
+            peer1.ownedBlocks.forEach(b -> peer1OwnedIndexes.add(b.getBlockIndex()));
+            
+            Optional<Long> firstMissingBlock = peer2BlockList.stream()
+                .filter(blockIndex -> !peer1OwnedIndexes.contains(blockIndex))
+                .findFirst();
+
+            // 3. Se encontrou um bloco, Peer 1 pede os dados desse bloco para o Peer 2
+            if (firstMissingBlock.isPresent()) {
+                long blockToRequest = firstMissingBlock.get();
+                peer1.requestAndSaveBlockData(new Peer(peer2.id, peer2.port, peer2.ip, null), blockToRequest);
+            } else {
+                System.out.println("Peer 1 já tem todos os blocos que o Peer 2 ofereceu.");
+            }
+        } else {
+            System.out.println("Peer 2 não tem blocos para compartilhar no momento.");
         }
 
         tracker.stop();

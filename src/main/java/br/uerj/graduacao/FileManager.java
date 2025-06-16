@@ -42,37 +42,15 @@ public class FileManager {
         }
     }
 
-    public void writeBlock(BlockModel block, long currentBlock, long totalBlocks) {
+    public void writeBlock(BlockModel block) {
         try {
             this.manager.seek(block.pointer());
             this.manager.write(block.getData());
-            updateProgressBar(currentBlock, totalBlocks);
+            // updateProgressBar(block.getBlockIndex(), numberOfBlocks);
         } catch (IOException error) {
             String msg = String.format("Erro de I/O ao escrever bloco (ponteiro: %d) no arquivo %s", block.pointer(),
                     this.filePath);
             LOGGER.log(Level.SEVERE, msg, error);
-        }
-    }
-
-    private void updateProgressBar(long current, long total) {
-        int percent = (int) ((current * 100) / total);
-        StringBuilder bar = new StringBuilder("[");
-
-        int progressChars = (int) (percent / 2.0);
-        for (int i = 0; i < 50; i++) {
-            if (i < progressChars) {
-                bar.append("=");
-            } else {
-                bar.append(" ");
-            }
-        }
-
-        bar.append("] " + percent + "%");
-        System.out.print("\r" + bar.toString());
-
-        if (current == total) {
-            System.out.println();
-            LOGGER.log(Level.INFO, "Escrita de {0} blocos concluida em {1}", new Object[] { total, this.filePath });
         }
     }
 

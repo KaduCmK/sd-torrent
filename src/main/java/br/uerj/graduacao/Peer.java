@@ -3,29 +3,34 @@ package br.uerj.graduacao;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.google.gson.*;
 
-public class PeerModel {
-    private static final Logger LOGGER = Logger.getLogger(PeerModel.class.getName());
+public class Peer {
+    private static final Logger LOGGER = Logger.getLogger(Peer.class.getName());
 
     public String ip;
     public int port;
     public String id;
-    public List<PeerModel> neighbors = new ArrayList<>();
+    private final FileManager fileManager;
+
+    public List<Peer> neighbors = new ArrayList<>();
     public List<BlockModel> ownedBlocks = new ArrayList<>();
 
-    public PeerModel(String ip, int port, String id) {
+    public Peer(String ip, int port, String id, FileManager fileManager) {
         this.ip = ip;
         this.port = port;
         this.id = id;
+        this.fileManager = fileManager;
     }
 
-    public PeerModel(String ip, int port) {
+    public Peer(String ip, int port) {
         this.ip = ip;
         this.port = port;
         this.id = null;
+        this.fileManager = null;
     }
 
     public void connectToTracker(String trackerAddress) {
@@ -49,7 +54,7 @@ public class PeerModel {
                     if (peerPort == this.port && peerIp.equals(this.ip))
                         continue;
 
-                    PeerModel p = new PeerModel(peerIp, peerPort);
+                    Peer p = new Peer(peerIp, peerPort);
                     this.neighbors.add(p);
                 }
 
@@ -103,13 +108,24 @@ public class PeerModel {
             ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream());
             ObjectInputStream input = new ObjectInputStream(socket.getInputStream());
 
-            Object request = input.readObject();
+            String request = (String) input.readObject();
 
-            if (request != null) {
-                System.out.println("Peer [" + this.id + "] recebeu uma mensagem: " + request);
-                output.writeObject(this.ownedBlocks);
-                output.flush();
+            LOGGER.info("Peer [" + this.id + "] recebeu uma mensagem: " + request);
+
+            if (request.equals("GET_BLOCKS_LIST")) {
+                List<Long> myIndexes = new ArrayList<>();
+                for (BlockModel b : this.ownedBlocks) {
+                    myIndexes.add(b.getBlockIndex());
+                }
+                output.writeObject(myIndexes);
+            } else if (request.startsWith("GET_BLOCK_DATA:")) {
+                long blockIndex = Long.parseLong(request.split(":")[1]);
+                // TODO: Verificar se o peer tem o bloco
+                BlockModel blockToSend = this.fileManager.readBlock(blockIndex);
+                output.writeObject(blockToSend);
             }
+            output.flush();
+
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -121,34 +137,57 @@ public class PeerModel {
             /* */}
     }
 
-    public void shareAndRequest(PeerModel neighbor) {
-        LOGGER.info("Peer [" + this.id + "] compartilhando e solicitando blocos com " + neighbor.id);
-        try {
-            Socket socket = new Socket(neighbor.ip, neighbor.port);
-            ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream());
-            ObjectInputStream input = new ObjectInputStream(socket.getInputStream());
+    /**
+     * LADO CLIENTE: Pede a um vizinho a lista de blocos que ele possui.
+     * 
+     * @return Uma lista de índices de blocos.
+     */
+    public List<Long> requestBlockListFrom(Peer neighbor) {
+        LOGGER.info("Peer [" + this.id + "] pedindo lista de blocos para " + neighbor.ip + ":" + neighbor.port);
+        try (Socket socket = new Socket(neighbor.ip, neighbor.port);
+                ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream());) {
 
-            output.writeObject("GET_BLOCKS");
+            output.flush();
+            try (ObjectInputStream input = new ObjectInputStream(socket.getInputStream())) {
+                output.writeObject("GET_BLOCKS_LIST");
+                output.flush();
+                return (List<Long>) input.readObject();
+            }
+
+        } catch (Exception e) {
+            LOGGER.warning("Não foi possível obter lista de blocos de " + neighbor.ip + ":" + neighbor.port);
+            return Collections.emptyList(); // Retorna lista vazia em caso de falha
+        }
+    }
+
+    /**
+     * LADO CLIENTE: Pede a um vizinho os dados de um bloco específico.
+     */
+    public void requestAndSaveBlockData(Peer neighbor, long blockIndex) {
+        LOGGER.info(
+                "Peer [" + this.id + "] pedindo o bloco " + blockIndex + " para " + neighbor.ip + ":" + neighbor.port);
+        try (Socket socket = new Socket(neighbor.ip, neighbor.port);
+                ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream());) {
+
             output.flush();
 
-            @SuppressWarnings("unchecked")
-            List<BlockModel> receivedList = (List<BlockModel>) input.readObject();
-            LOGGER.info("<<< Recebidos " + receivedList.size() + " blocos de " + neighbor.id);
+            try (ObjectInputStream input = new ObjectInputStream(socket.getInputStream())) {
+            output.writeObject("GET_BLOCK_DATA:" + blockIndex);
+            output.flush();
 
-            Set<Long> myBlockIndexes = new HashSet<>();
-            for (BlockModel b : this.ownedBlocks) {
-                myBlockIndexes.add(b.getBlockIndex());
+            BlockModel receivedBlock = (BlockModel) input.readObject();
+            
+            if (receivedBlock != null && receivedBlock.getData() != null) {
+                this.fileManager.writeBlock(receivedBlock);
+                this.ownedBlocks.add(receivedBlock);
+                LOGGER.info("<<< Bloco " + blockIndex + " recebido e salvo com sucesso!");
+            } else {
+                LOGGER.warning("Recebido bloco nulo ou sem dados do vizinho.");
             }
+        }
 
-            for (BlockModel receivedBlock : receivedList) {
-                if (!myBlockIndexes.contains(receivedBlock.getBlockIndex())) {
-                    this.ownedBlocks.add(receivedBlock);
-                    LOGGER.info("<<< Bloco novo adquirido: " + receivedBlock.getBlockIndex());
-                }
-            }
-            socket.close();
         } catch (Exception e) {
-            LOGGER.severe("Erro ao compartilhar e solicitar blocos com " + neighbor.id);
+            LOGGER.log(Level.SEVERE, "Falha ao obter dados do bloco " + blockIndex, e);
         }
     }
 }
