@@ -1,3 +1,4 @@
+// kaducmk/sd-torrent/sd-torrent-ae34dccac1204ab615974cc10ff27cf98c7c6569/src/main/java/br/uerj/graduacao/Peer.java
 package br.uerj.graduacao;
 
 import com.google.gson.Gson;
@@ -22,8 +23,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
-
 import org.apache.commons.codec.digest.DigestUtils;
+
 
 public class Peer extends PeerInfo {
     private static final Logger LOGGER = Logger.getLogger(Peer.class.getName());
@@ -32,7 +33,6 @@ public class Peer extends PeerInfo {
     private final String trackerAddress;
     private final FileManager fileManager;
     private final long totalBlocks;
-
     private final String originalChecksum;
     private boolean checksumVerified = false;
 
@@ -45,15 +45,14 @@ public class Peer extends PeerInfo {
     private final Gson gson = new Gson();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
-    public Peer(int port, String trackerAddress, String originalFileName, long totalBlocks, long fileSize,
-            String checksum) {
+    public Peer(int port, String trackerAddress, String originalFileName, long totalBlocks, long fileSize, String originalChecksum) {
         super("localhost", port);
         this.id = "peer-" + port;
         this.trackerAddress = trackerAddress;
         this.totalBlocks = totalBlocks;
-        this.originalChecksum = checksum;
         String peerFileName = originalFileName.replace(".", "-" + port + ".");
         this.fileManager = new FileManager("./" + peerFileName, fileSize, totalBlocks);
+        this.originalChecksum = originalChecksum;
     }
 
     public String getId() {
@@ -82,7 +81,6 @@ public class Peer extends PeerInfo {
     }
 
     private void setupHttpServer() {
-        // Lógica mantida conforme solicitado
         JsonMapper gsonMapper = new JsonMapper() {
             @Override
             public String toJsonString(Object obj, Type type) {
@@ -170,33 +168,27 @@ public class Peer extends PeerInfo {
         if (knownPeers.isEmpty())
             return;
 
-        // --- LÓGICA DE UNCHOKE CORRIGIDA E OTIMIZADA ---
         Map<Long, Integer> blockFrequencies = getBlockFrequencies();
-        if (blockFrequencies.isEmpty())
-            return;
+        if (blockFrequencies.isEmpty() && !isComplete()) return;
 
-        // 1. Define "blocos raros" como os 30% menos comuns para focar a pontuação.
-        int rareThreshold = (int) (blockFrequencies.size() * 0.3);
         Set<Long> rareBlockSet = blockFrequencies.entrySet().stream()
                 .sorted(Map.Entry.comparingByValue())
-                .limit(Math.max(1, rareThreshold)) // Garante que sempre haja pelo menos 1 bloco raro
+                .limit(Math.max(1, (int)(blockFrequencies.size() * 0.3)))
                 .map(Map.Entry::getKey)
-                .collect(Collectors.toSet()); // Usa um Set para verificação O(1) (muito rápido)
+                .collect(Collectors.toSet());
 
-        // 2. Pontua os peers baseado em quantos blocos raros eles possuem.
         Map<PeerInfo, Integer> peerScores = new HashMap<>();
         for (PeerInfo peer : new ArrayList<>(knownPeers)) {
             Set<Long> peerBlocks = getBlocksFromPeer(peer);
             int score = 0;
             for (Long block : peerBlocks) {
-                if (rareBlockSet.contains(block)) { // Verificação agora é instantânea
+                if (rareBlockSet.contains(block)) {
                     score++;
                 }
             }
             peerScores.put(peer, score);
         }
 
-        // 3. Seleciona os 4 peers com maior pontuação.
         List<PeerInfo> sortedPeers = peerScores.entrySet().stream()
                 .sorted(Map.Entry.<PeerInfo, Integer>comparingByValue().reversed())
                 .map(Map.Entry::getKey)
@@ -205,7 +197,6 @@ public class Peer extends PeerInfo {
         unchokedPeers.clear();
         sortedPeers.stream().limit(4).forEach(unchokedPeers::add);
 
-        // 4. Adiciona 1 peer otimista aleatório para dar chance a todos.
         List<PeerInfo> chokedPeers = new ArrayList<>(knownPeers);
         chokedPeers.removeAll(unchokedPeers);
         if (!chokedPeers.isEmpty()) {
@@ -214,31 +205,36 @@ public class Peer extends PeerInfo {
     }
 
     private void runLifecycle() {
+        boolean isSeeding = false;
+
         while (true) {
             try {
+                // Enquanto não estiver completo, continua baixando
                 if (!isComplete()) {
                     findAndDownloadRarestBlock();
                 } else {
+                    // Após completar, verifica o checksum se ainda não o fez
                     if (!checksumVerified) {
                         checksumVerified = verifyChecksum();
-                        // Se a verificação falhar, o peer vai se resetar e recomeçar o download
                         if (!checksumVerified) {
-                            continue; // Volta pro início do loop pra baixar os blocos de novo
+                            // Se o checksum falhar, o peer se reseta e continua o loop para baixar novamente
+                            continue;
                         }
                     }
                     
-                    LOGGER.info("[" + id + "] \uD83C\uDF89 Download completo e verificado! Aguardando vizinhos...");
-
-                    if (areAllNeighborsComplete()) {
-                        LOGGER.info("[" + id + "] Todos os vizinhos completaram o download.");
-                        break;
+                    // Entra em seeding
+                    if (!isSeeding) {
+                        isSeeding = true;
+                        LOGGER.info("[" + id + "] \uD83C\uDF89 Download completo! Entrando em modo de semeadura (seeding).");
                     }
                 }
-                Thread.sleep(150);
+                
+                // O peer continua vivo para semear, dormindo para não consumir CPU
+                Thread.sleep(500);
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                LOGGER.warning("[" + id + "] Loop de vida interrompido.");
+                LOGGER.warning("[" + id + "] Loop de vida interrompido. Desligando.");
                 break;
             }
         }
@@ -254,7 +250,7 @@ public class Peer extends PeerInfo {
                 return true;
             } else {
                 LOGGER.severe("[" + id + "] CORRUPÇÃO DETECTADA! Checksum do arquivo (" + downloadedFileChecksum + ") não bate com o original (" + this.originalChecksum + "). Reiniciando o download.");
-                this.myBlocks.clear(); // Limpa a lista de blocos que ele tem
+                this.myBlocks.clear();
                 return false;
             }
         } catch (IOException e) {
@@ -262,19 +258,6 @@ public class Peer extends PeerInfo {
             this.myBlocks.clear();
             return false;
         }
-    }
-
-    private boolean areAllNeighborsComplete() {
-        if (knownPeers.isEmpty()) {
-            return true;
-        }
-        for (PeerInfo peer : new ArrayList<>(knownPeers)) {
-            Set<Long> neighborBlocks = getBlocksFromPeer(peer);
-            if (neighborBlocks.size() < totalBlocks) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private void findAndDownloadRarestBlock() {
@@ -291,7 +274,6 @@ public class Peer extends PeerInfo {
         for (Map.Entry<Long, Integer> entry : sortedFrequencies) {
             long rarestBlockIndex = entry.getKey();
             List<PeerInfo> candidates = findPeersWithBlock(rarestBlockIndex);
-
             Collections.shuffle(candidates);
 
             for (PeerInfo peer : candidates) {
